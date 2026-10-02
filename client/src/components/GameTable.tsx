@@ -71,7 +71,6 @@ function CardRow({ count, back = 'red' }: { count: number; back?: string }) {
           />
         ))}
       </div>
-      <div className="text-[11px] font-bold text-ink-300">{count} ورقة</div>
     </div>
   );
 }
@@ -79,12 +78,59 @@ function CardRow({ count, back = 'red' }: { count: number; back?: string }) {
 function Seat({ player, rel, isTurn, isDealer, handCount, bid, passed, bestBid, cardBack, deadline, badge }: SeatProps) {
   const teamColor = player ? (TEAM_OF_SEAT[player.seat] === 0 ? '#38bdf8' : '#fb923c') : '#94a3b8';
   const vertical = rel === 1 || rel === 3;
+
+  /* ---------- المقعد العلوي (الشريك/المقابل): الأيقونة أولاً ثم الاسم يمينها، ثم عدد الورق ثم الأوراق ---------- */
+  if (rel === 2) {
+    return (
+      <div className="absolute left-1/2 top-1 z-20 flex max-w-[230px] -translate-x-1/2 flex-col items-center gap-0.5">
+        <div className="flex items-center gap-1.5">
+          <div className="relative">
+            <Avatar emoji={player?.avatar ?? '🪑'} size={40} frame={player?.isBot ? 'gold' : null} />
+            {isTurn && <TimerRing until={deadline} />}
+            {isDealer && (
+              <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-white text-[9px] font-black text-felt-950 shadow">
+                D
+              </span>
+            )}
+            {player && !player.connected && !player.isBot && (
+              <span className="absolute -bottom-1 -left-1 rounded-full bg-rose-600 px-1 text-[8px] font-bold">منقطع</span>
+            )}
+            {player?.isBot && <span className="absolute -bottom-1 -left-1 rounded-full bg-slate-700 px-1 text-[8px] font-bold">بوت</span>}
+          </div>
+          <div className="rounded-xl bg-black/60 px-2 py-0.5 text-right leading-tight">
+            <div className="max-w-[110px] truncate text-[11px] font-bold" style={{ color: teamColor }}>
+              {player?.name ?? 'مقعد فارغ'}
+            </div>
+            {player && <div className="text-[9px] text-ink-300">مستوى {player.level}</div>}
+          </div>
+        </div>
+
+        {handCount > 0 && (
+          <>
+            <div className="text-[10px] font-bold leading-none text-ink-300">{handCount} ورقة</div>
+            <CardRow count={handCount} back={cardBack} />
+          </>
+        )}
+
+        {/* الشارات (طلب/تمرير/المملكة) أسفل الأوراق حتى تبقى الأيقونة ثم الأوراق بلا حجب */}
+        {(bid !== null || passed || badge) && (
+          <div className="flex items-center gap-1">
+            {bid !== null && (
+              <span className={cn('rounded-full px-2 text-[10px] font-extrabold', bestBid === bid ? 'bg-gold-500 text-felt-950' : 'bg-white/15')}>{bid}</span>
+            )}
+            {passed && <span className="rounded-full bg-rose-900/80 px-2 text-[9px] font-bold text-rose-200">مرّر</span>}
+            {badge}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
         'absolute z-20 flex items-center gap-1',
-        // المقعد العلوي (الشريك): الترتيب من الأعلى للأسفل المقلوب حتى تبقى أوراقه بعيدة عن مركز الطاولة
-        rel === 2 ? 'flex-col-reverse' : 'flex-col',
+        'flex-col',
         POS[rel],
         vertical ? 'max-w-[96px]' : 'max-w-[170px]',
       )}
@@ -118,14 +164,14 @@ function Seat({ player, rel, isTurn, isDealer, handCount, bid, passed, bestBid, 
         {badge}
       </div>
 
-      {handCount > 0 &&
-        (rel === 2 ? (
-          <CardRow count={handCount} back={cardBack} />
-        ) : (
+      {handCount > 0 && (
+        <>
+          <div className="text-[10px] font-bold leading-none text-ink-300">{handCount} ورقة</div>
           <div className="scale-[0.85]">
             <CardStack count={handCount} back={cardBack} size="xs" />
           </div>
-        ))}
+        </>
+      )}
     </div>
   );
 }
@@ -152,7 +198,7 @@ interface TableProps {
   hint?: React.ReactNode;
   /** سطر معلومات فوق اليد */
   footer?: React.ReactNode;
-  /** إخفاء أوراق الأكلة في الوسط (لأن التركس يعرض المجموعات) */
+  /** إخفاء أوراق اللطش في الوسط (لأن التركس يعرض المجموعات) */
   hideTrick?: boolean;
   /** شارة صغيرة في الزاوية اليمنى العليا من الطاولة (نوع التسمية/الطرنيب) */
   corner?: React.ReactNode;
@@ -163,6 +209,9 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
   const relOf = (seat: number) => relativeSeat(mySeat, seat) as 0 | 1 | 2 | 3;
   const turnDeadline =
     state.phase === 'bidding' || state.phase === 'playing' || state.phase === 'choosing' || state.phase === 'reveal' ? state.deadline : null;
+  /** دوري للعب أو للاختيار → يتوهّج مربع أوراقي */
+  const myTurnToAct =
+    state.isMyTurn && (state.phase === 'playing' || state.phase === 'choosing' || state.phase === 'bidding' || state.phase === 'reveal');
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col px-2">
@@ -192,7 +241,7 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
           )}
         </div>
 
-        {/* أوراق الأكلة */}
+        {/* أوراق اللطش */}
         <div className={cn('absolute inset-0 z-10', hideTrick && 'hidden')}>
           {state.trick.map((tc) => (
             <div key={tc.card + '-' + tc.seat} className={cn('absolute', TRICK_POS[relOf(tc.seat)])}>
@@ -225,16 +274,21 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
         {children}
       </div>
 
-      {/* منطقة أوراقي */}
-      <div className="relative mt-2">
+      {/* منطقة أوراقي — تتوهّج عندما يكون الدور عليّ */}
+      <div
+        className={cn(
+          'relative mt-2 rounded-2xl px-1 pb-1 pt-1.5 transition-colors',
+          myTurnToAct && 'bg-gold-500/10 ring-2 ring-gold-400/80 shadow-[0_0_26px_rgba(212,175,55,0.45)]',
+        )}
+      >
         <div className="mb-1 flex items-center justify-between px-2 text-[11px] text-ink-300">
           {footer ?? (
             <span>
               أوراقك: {state.myHand.length}
-              {' • '}أكلات فريقك: {state.tricksWon[state.myTeam]}
+              {' • '}لطوش فريقك: {state.tricksWon[state.myTeam]}
             </span>
           )}
-          {state.isMyTurn && (state.phase === 'playing' || state.phase === 'choosing') && <span className="font-bold text-gold-300">دورك الآن</span>}
+          {myTurnToAct && <span className="font-bold text-gold-300">دورك الآن</span>}
           {!state.isMyTurn && (state.phase === 'bidding' || state.phase === 'playing') && (
             <span className="truncate">{(state.seats[state.turn]?.name ?? '') + ' يفكر…'}</span>
           )}

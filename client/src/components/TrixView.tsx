@@ -62,7 +62,7 @@ function Piles({ state, nameOf }: { state: RoomState; nameOf: (seat: number) => 
   );
 }
 
-/** شريط نتائج اللاعبين الأربعة (لعبة فردية) */
+/** شريط نتائج اللاعبين الأربعة (لعبة فردية) — بطاقات صغيرة تظهر كلها على الشاشة */
 function TrixScoreboard({ state }: { state: RoomState }) {
   const tx = state.trix!;
   const rows = useMemo(
@@ -74,39 +74,28 @@ function TrixScoreboard({ state }: { state: RoomState }) {
     [state.seats, state.scores, tx.roundScores],
   );
   return (
-    <div className="no-scrollbar mx-2 mb-2 flex gap-2 overflow-x-auto">
+    <div className="mx-1.5 mb-1.5 grid grid-cols-4 gap-1">
       {rows.map((r, i) => (
         <div
           key={r.seat}
           className={cn(
-            'glass min-w-[104px] flex-1 rounded-2xl px-2 py-1.5',
-            r.seat === state.mySeat && 'ring-2 ring-gold-400/70',
-            r.seat === tx.kingSeat && 'ring-2 ring-sky-400/70',
+            'flex flex-col items-center rounded-xl px-0.5 py-1',
+            r.seat === state.mySeat ? 'bg-gold-500/15 ring-1 ring-gold-400/70' : 'bg-black/35',
+            r.seat === tx.kingSeat && 'ring-1 ring-sky-400/60',
           )}
         >
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-black text-ink-300">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '4'}</span>
-            <Avatar emoji={r.p!.avatar} size={24} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[11px] font-bold">
-                {r.seat === tx.kingSeat && <span title="صاحب المملكة">👑 </span>}
-                {r.p!.name}
-              </div>
-            </div>
+          <div className="relative">
+            <Avatar emoji={r.p!.avatar} size={26} />
+            {r.seat === tx.kingSeat && <span className="absolute -top-1.5 -right-1 text-[10px] leading-none">👑</span>}
           </div>
-          <div className="mt-0.5 flex items-center justify-between">
-            <span className="text-base font-black text-gold-300">{r.total}</span>
-            <>
-              {r.delta !== 0 && (
-                <span
-                  key={r.delta}
-                  className={cn('text-[11px] font-bold', r.delta > 0 ? 'text-emerald-400' : 'text-rose-400')}
-                >
-                  {r.delta > 0 ? `+${r.delta}` : r.delta}
-                </span>
-              )}
-            </>
-          </div>
+          <span className="mt-0.5 leading-none">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '4️⃣'}</span>
+          <span className="text-sm font-black leading-tight text-gold-300">{r.total}</span>
+          {r.delta !== 0 && (
+            <span className={cn('text-[9px] font-bold leading-none', r.delta > 0 ? 'text-emerald-400' : 'text-rose-400')}>
+              {r.delta > 0 ? `+${r.delta}` : r.delta}
+            </span>
+          )}
+          <span className="mt-0.5 w-full truncate text-center text-[9px] leading-tight text-ink-300">{r.p!.name}</span>
         </div>
       ))}
     </div>
@@ -354,20 +343,19 @@ export function TrixView({
         }
         badge={isTrixContract ? <Piles state={state} nameOf={nameOf} /> : null}
         seatBadge={(seat) => {
-          const left = state.handCounts[seat] ?? 0;
           const isKing = seat === tx.kingSeat;
           const finished = tx.finished.indexOf(seat);
+          if (!isKing && finished < 0) return null;
           return (
             <span className="flex items-center gap-1">
               {isKing && <span className="rounded-full bg-sky-600/80 px-1.5 text-[9px] font-bold">👑 المملكة</span>}
               {finished >= 0 && <span className="rounded-full bg-emerald-700/80 px-1.5 text-[9px] font-bold">أنهى #{finished + 1}</span>}
-              {isTrixContract && finished < 0 && <span className="rounded-full bg-black/40 px-1.5 text-[9px]">{left} ورقة</span>}
             </span>
           );
         }}
         footer={
           <span>
-            أوراقك: {state.myHand.length} • أكلاتك: {tx.trickCounts[state.mySeat] ?? 0}
+            أوراقك: {state.myHand.length} • لطوشك: {tx.trickCounts[state.mySeat] ?? 0}
           </span>
         }
         hint={null}

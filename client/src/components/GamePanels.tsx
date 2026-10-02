@@ -42,7 +42,7 @@ export function ScoreBar({ state }: { state: RoomState }) {
         <span>الجولة {Math.max(1, state.round)}</span>
         <span>الهدف {target} نقطة</span>
         <span>
-          الأكلات {state.tricksWon?.[0] ?? 0} - {state.tricksWon?.[1] ?? 0}
+          اللطوش {state.tricksWon?.[0] ?? 0} - {state.tricksWon?.[1] ?? 0}
         </span>
       </div>
       <div className="mt-1.5 grid grid-cols-2 gap-2">
@@ -187,10 +187,10 @@ export function RoundSummary({ state, onContinue }: { state: RoomState; onContin
         </div>
         <div className="text-center">
           <div className="text-lg font-bold">
-            {s.made ? 'نجح الطلب' : 'فشل الطلب'} — {s.bid} أكلات
+            {s.made ? 'نجح الطلب' : 'فشل الطلب'} — {s.bid} لطش
           </div>
           <div className="mt-1 text-sm text-ink-300">
-            فريق الطلب أخذ <span className="font-bold text-ink-100">{s.teamTricks}</span> أكلة
+            فريق الطلب أخذ <span className="font-bold text-ink-100">{s.teamTricks}</span> لطش
             {s.doubled && ' (مضاعف)'}
             {s.kaboot && ' — كبوت!'}
           </div>
