@@ -15,7 +15,28 @@ if (!defined('TRIX_START')) {
     define('TRIX_START', microtime(true));
 }
 
+/*
+ * مُحمِّل تلقائي لكل كلاسات الخادم (Trix\Foo\Bar  →  src/Foo/Bar.php)
+ * مهم جداً على الاستضافة الحقيقية: لا نعتمد على تحميل مسبق من أي مكان،
+ * فأي كلاس يُستخدم يُحمَّل من ملفه مباشرة (مع مراعاة حساسية حالة الأحرف في Linux).
+ */
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'Trix\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $relative = str_replace('\\', '/', substr($class, strlen($prefix)));
+    if ($relative === '' || strpos($relative, '..') !== false) {
+        return;
+    }
+    $file = __DIR__ . '/' . $relative . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+
 // ملاحظة: نستخدم require_once عادةً، وجسر التطوير المحلي يتكفّل بتحميل الكلاسات عند الحاجة
+require_once __DIR__ . '/Core/Config.php';
 require_once __DIR__ . '/Core/Http.php';
 require_once __DIR__ . '/Core/Db.php';
 require_once __DIR__ . '/Core/Auth.php';

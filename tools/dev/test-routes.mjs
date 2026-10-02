@@ -4,13 +4,15 @@
  * يفحص كل مسار على حدة ويتأكد من نجاحه أو من رجوعه بخطأ متوقّع.
  */
 const BASE = process.env.TRIX_API || 'http://127.0.0.1:8095/index.php?r=';
+// TRIX_NOPRELOAD=1 يحاكي استضافة حقيقية بلا تحميل مسبق للكلاسات
+const NO_PRELOAD = process.env.TRIX_NOPRELOAD ? '&__nopreload=1' : '';
 
 let pass = 0;
 let fail = 0;
 const failures = [];
 
 async function call(route, body = {}, { token = '', method = 'POST', expectOk = true } = {}) {
-  const res = await fetch(BASE + route, {
+  const res = await fetch(BASE + route + NO_PRELOAD, {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
     body: method === 'GET' ? undefined : JSON.stringify(body),

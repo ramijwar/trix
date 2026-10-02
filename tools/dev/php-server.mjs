@@ -123,6 +123,8 @@ async function runPhp(req, rawBody) {
     get,
     post,
     body: rawBody || '',
+    // __nopreload=1 يحاكي استضافة حقيقية بلا تحميل مسبق للكلاسات (لاختبار التحميل التلقائي)
+    noPreload: url.searchParams.has('__nopreload'),
   };
   try {
     await php.writeFile('/request.json', JSON.stringify(payload));

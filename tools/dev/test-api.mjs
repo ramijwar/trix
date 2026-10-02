@@ -3,10 +3,12 @@
  *   cd tools/dev && node test-api.mjs
  */
 const BASE = process.env.TRIX_API || 'http://127.0.0.1:8095/index.php?r=';
+// TRIX_NOPRELOAD=1 يحاكي استضافة حقيقية بلا تحميل مسبق للكلاسات
+const NO_PRELOAD = process.env.TRIX_NOPRELOAD ? '&__nopreload=1' : '';
 let token = '';
 
 async function api(route, body = {}, opts = {}) {
-  const res = await fetch(BASE + route, {
+  const res = await fetch(BASE + route + NO_PRELOAD, {
     method: opts.method || 'POST',
     headers: {
       'Content-Type': 'application/json',

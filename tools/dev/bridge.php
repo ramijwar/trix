@@ -31,6 +31,13 @@ $preload = [
     '/src/Api/RoomApi.php' => 'Trix\Api\RoomApi',
     '/src/Api/Router.php' => 'Trix\Api\Router',
 ];
+// محاكاة استضافة حقيقية: عند __nopreload=1 نحمّل فقط ملف Http (لأن الجسر يحتاج HttpExit)
+// ونترك bootstrap.php يتكفل بالباقي عبر التحميل التلقائي — يكشف أي كلاس غير محمّل.
+$__req = json_decode((string) @file_get_contents('/request.json'), true);
+$noPreload = is_array($__req) && !empty($__req['noPreload']);
+if ($noPreload) {
+    $preload = ['/src/Core/Http.php' => 'Trix\\Core\\Http'];
+}
 foreach ($preload as $file => $class) {
     if (!class_exists($class) && is_file($file)) {
         require $file;

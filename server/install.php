@@ -152,10 +152,11 @@ function h(string $s): string
             <ul>
                 <li>عنوان الـ API: <code><?= h((($_SERVER['REQUEST_SCHEME'] ?? 'https') . '://' . ($_SERVER['HTTP_HOST'] ?? 'your-domain.com') . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/') . '/index.php')) ?></code></li>
                 <li>جرّب الصحة: <a style="color:#7dd3fc" href="./index.php?r=health">index.php?r=health</a></li>
-                <li>ضع هذا العنوان في تطبيق الأندرويد من شاشة الاتصال بالخادم.</li>
+                <li>تطبيق الأندرويد مضمَّن بهذا العنوان مسبقاً — لا يحتاج أي إعداد.</li>
                 <li><strong>مهم:</strong> احذف ملف install.php بعد الانتهاء.</li>
             </ul>
         </div>
+        <a class="btn" href="./">🎮 افتح اللعبة</a>
         <a class="btn btn2" href="./index.php?r=health" target="_blank">اختبار الخادم</a>
         <a class="btn btn3" href="?selfdestruct=1" onclick="return confirm('حذف ملف التثبيت نهائياً؟')">حذف ملف التثبيت</a>
     <?php elseif (!$errors): ?>
