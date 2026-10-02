@@ -34,9 +34,19 @@
   </IfModule>
 </Files>
 
+# ---------- تمرير ترويسة المصادقة إلى PHP ----------
+# بعض الاستضافات المشتركة (LiteSpeed / FastCGI) تحذف Authorization قبل وصولها
+# إلى PHP فيتوقف تسجيل الدخول. السطر التالي يعيد تمريرها.
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
 # ---------- منع تصفح المجلدات الداخلية ----------
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  RewriteCond %{HTTP:Authorization} ^(.+)$
+  RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
   # منع الوصول المباشر إلى مجلدات الشيفرة والبيانات
   RewriteRule ^(src|data|tools|docs)(/|$) - [F,L]

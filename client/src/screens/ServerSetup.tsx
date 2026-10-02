@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { pingServer, isNative } from '../lib/api';
+import { BUILT_IN_SERVER, pingServer, isNative } from '../lib/api';
 import { useStore } from '../lib/store';
 import { Button, Panel } from '../components/ui';
 
@@ -11,7 +11,7 @@ import { Button, Panel } from '../components/ui';
 export function ServerSetupScreen() {
   const saveServer = useStore((s) => s.saveServer);
   const toast = useStore((s) => s.toast);
-  const [url, setUrl] = useState('https://');
+  const [url, setUrl] = useState(BUILT_IN_SERVER || 'https://');
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 

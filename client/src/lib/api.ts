@@ -143,12 +143,22 @@ export async function api<T = ApiResult>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeout ?? 30000);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (getToken()) headers.Authorization = `Bearer ${getToken()}`;
+  const tok = getToken();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+  // بعض الاستضافات المشتركة تحذف ترويسة Authorization — نرسل التوكِن أيضاً
+  // في جسم الطلب (POST) أو في الرابط (GET) كقناة احتياطية.
+  let url = apiUrl(route);
+  let payload: string | undefined;
+  if (method === 'GET') {
+    if (tok) url += `&t=${encodeURIComponent(tok)}`;
+  } else {
+    payload = JSON.stringify(tok && body.token === undefined ? { ...body, token: tok } : body);
+  }
   try {
-    const res = await fetch(apiUrl(route), {
+    const res = await fetch(url, {
       method,
       headers,
-      body: method === 'GET' ? undefined : JSON.stringify(body),
+      body: payload,
       signal: controller.signal,
       cache: 'no-store',
     });

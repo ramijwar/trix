@@ -148,8 +148,11 @@ final class Http
         if (preg_match('/Bearer\s+(.+)/i', (string) $header, $m)) {
             return trim($m[1]);
         }
-        // بديل احتياطي لبعض الاستضافات التي تحذف الرأس
+        // بديل احتياطي لبعض الاستضافات التي تحذف الرأس (جسم الطلب أو الرابط)
         $alt = self::str('token');
+        if ($alt === '') {
+            $alt = self::str('t');
+        }
         return $alt !== '' ? $alt : null;
     }
 

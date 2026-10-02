@@ -101,6 +101,13 @@ node tools/android/build-apk.mjs         # يبني الواجهة + APK موق�
 
 الأدوات تُحفظ في `~/.cache/trix-android-toolchain` (تُنزَّل من npm و PyPI فقط).
 
+> **عنوان الخادم داخل التطبيق:** مضبوط مسبقاً في `client/src/config.ts` على
+> `https://t3lam.site/trix` (يُستخدم في وضع البناء `android` فقط — نسخة الويب تبقى بمسارات نسبية).
+> لتغييره لاحقاً:
+> ```bash
+> VITE_TRIX_SERVER=https://example.com/trix node tools/android/build-apk.mjs
+> ```
+
 مع تمرير التوقيع الخاص بك (اختياري):
 
 ```bash
