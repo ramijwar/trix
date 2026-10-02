@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import type { RoomSettings, RoomState, Suit, TrixContract } from '../game/types';
 import { TEAM_COLORS, cn, shareText } from '../lib/utils';
-import { Avatar, Button, Confetti, EmptyState, Modal, Panel, SectionTitle } from './ui';
+import { Avatar, Button, EmptyState, Modal, Panel, SectionTitle } from './ui';
 import { GameTable } from './GameTable';
 import { BidPanel, ChatDrawer, GameOver, RoundSummary, ScoreBar } from './GamePanels';
 import { TrixView } from './TrixView';
@@ -122,7 +121,6 @@ export function GameView({
 
       <RoundSummary state={state} onContinue={() => actions.continueRound()} />
       <GameOver state={state} onExit={onExit} onRematch={() => actions.continueRound()} />
-      <Confetti show={state.phase === 'game_end' && state.winnerTeam === state.myTeam} />
 
       <ChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} state={state} onSend={(t, e) => actions.chat(t, e)} />
 
@@ -131,13 +129,6 @@ export function GameView({
           <Button variant="ghost" full onClick={() => void shareText(`انضم إليّ في طاولة الطرنيب! الرمز: ${state.roomCode}`)}>
             📤 دعوة صديق (مشاركة الرمز)
           </Button>
-          <div className="rounded-2xl bg-black/25 p-3 text-xs leading-relaxed text-ink-300">
-            <div className="mb-1 font-bold text-ink-100">القوانين السريعة</div>
-            • الشركاء: كل لاعبين متقابلين فريق — أنت وشريكك مقابل الفريق الآخر.
-            <br />• الطلب من 7 إلى 13، والفائز يختار الطرنيب.
-            <br />• يجب اتباع اللون إن كان بحوزتك، وإلا فأنت حر.
-            <br />• الهدف: {state.target} نقطة — الكبوت 13 أكلة +16، وطلب 13 ناجح +26.
-          </div>
           <Button variant="danger" full onClick={onExit}>
             🚪 الخروج من الطاولة
           </Button>
@@ -200,7 +191,7 @@ export function WaitingRoom({
           </div>
           <div className="text-[11px] text-ink-300">
             {filled}/4 لاعبين •{' '}
-            {state.settings?.game === 'trix' ? `${state.settings?.kingdoms ?? 4} ممالك • لعبة فردية` : `هدف ${state.target}`}
+            {state.settings?.game === 'trix' ? `${state.settings?.kingdoms ?? 4} ممالك` : `هدف ${state.target}`}
           </div>
         </div>
         <button onClick={() => setChatOpen(true)} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
@@ -233,12 +224,7 @@ export function WaitingRoom({
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-sm font-black">
-                {state.settings?.game === 'trix' ? '🧩 لعبة التركس' : '🃏 لعبة الطرنيب'}
-              </div>
-              <div className="text-[11px] leading-relaxed text-ink-300">
-                {state.settings?.game === 'trix'
-                  ? 'لعبة فردية بـ٥ تسميات: ختيار الكبة، البنات، الديناري، اللطوش، والتركس — الأعلى نقاطاً يفوز.'
-                  : 'لعبة شراكة: أنت وشريكك (المقابل) فريق واحد مقابل الفريق الآخر.'}
+                {state.settings?.game === 'trix' ? '🧩 تركس' : '🃏 طرنيب'}
               </div>
             </div>
             {state.isHost ? (
@@ -262,9 +248,8 @@ export function WaitingRoom({
             const team = seat % 2;
             const isMe = seat === state.mySeat;
             return (
-              <motion.div
+              <div
                 key={seat}
-                layout
                 className={cn('glass relative rounded-2xl p-3', isMe && 'ring-2 ring-gold-400/70')}
                 style={{ borderTop: `3px solid ${TEAM_COLORS[team]}` }}
               >
@@ -300,7 +285,7 @@ export function WaitingRoom({
                     إزالة البوت
                   </button>
                 )}
-              </motion.div>
+              </div>
             );
           })}
         </div>
@@ -373,7 +358,7 @@ export function WaitingRoom({
 
         {freeSeats.length > 0 && (
           <div className="mt-3">
-            <SectionTitle icon={<span>🔄</span>}>تغيير مقعدي (لاختيار شريكك)</SectionTitle>
+            <SectionTitle icon={<span>🔄</span>}>تغيير مقعدي</SectionTitle>
             <div className="grid grid-cols-2 gap-2">
               {freeSeats.map((seat) => (
                 <Button key={seat} variant="ghost" size="sm" onClick={() => actions.sit?.(seat)}>
@@ -381,7 +366,6 @@ export function WaitingRoom({
                 </Button>
               ))}
             </div>
-            <p className="mt-1 px-1 text-[11px] text-ink-500">الشركاء متقابلان: المقعد المقابل لك هو شريكك تلقائياً.</p>
           </div>
         )}
       </div>
@@ -396,11 +380,6 @@ export function WaitingRoom({
       </Modal>
 
       {filled === 0 && <EmptyState icon="🪑" title="غرفة فارغة" hint="ادعُ أصدقاءك بالرمز" />}
-      {filled > 0 && filled < 4 && (
-        <div className="safe-bottom px-3 pb-2 text-center text-[11px] text-ink-500">
-          يمكن للمضيف إضافة بوتات لإكمال الطاولة واللعب فوراً
-        </div>
-      )}
     </div>
   );
 }

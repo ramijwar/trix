@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { useNav, type View } from '../lib/nav';
 import { useStore } from '../lib/store';
 import { cn } from '../lib/utils';
@@ -29,13 +28,7 @@ export function BottomNav() {
             }}
             className={cn('relative flex flex-col items-center gap-0.5 rounded-2xl py-2 text-[11px] font-bold transition', active ? 'text-gold-300' : 'text-ink-300')}
           >
-            {active && (
-              <motion.span
-                layoutId="nav-pill"
-                className="absolute inset-0 rounded-2xl bg-gradient-to-b from-gold-500/25 to-gold-600/10 ring-1 ring-gold-500/40"
-                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              />
-            )}
+            {active && <span className="absolute inset-0 rounded-2xl bg-gradient-to-b from-gold-500/25 to-gold-600/10 ring-1 ring-gold-500/40" />}
             <span className="relative z-10 text-lg">{it.icon}</span>
             <span className="relative z-10">{it.label}</span>
           </button>

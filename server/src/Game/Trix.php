@@ -803,6 +803,17 @@ final class Trix
 
     /* ============================ البوتات ============================ */
 
+    /** هل يخطئ البوت هذه المرة؟ (بمستوى اللاعب الذي أضافه — لا أقوى منه) */
+    private static function shouldBlunder(array $s, int $seat): bool
+    {
+        $pl = $s['seats'][$seat] ?? null;
+        $skill = isset($pl['botSkills'])
+            ? max(0.05, min(1.0, (float) $pl['botSkills']))
+            : max(0.05, min(1.0, ((int) ($pl['level'] ?? 1)) / 40));
+        $chance = (int) round(max(0.0, (1.0 - $skill) * 40));
+        return $chance > 0 && random_int(1, 100) <= $chance;
+    }
+
     public static function botAct(array &$s): bool
     {
         $phase = (string) ($s['phase'] ?? '');
@@ -813,6 +824,9 @@ final class Trix
             if ($contract === null) {
                 return false;
             }
+            if (count($options) > 1 && self::shouldBlunder($s, $seat)) {
+                $contract = $options[random_int(0, count($options) - 1)];
+            }
             self::chooseContract($s, $seat, $contract);
             return true;
         }
@@ -822,7 +836,11 @@ final class Trix
                 self::skipStuckPlayers($s);
                 return true;
             }
-            self::applyPlay($s, $seat, self::botChooseCard($s, $seat));
+            $card = self::botChooseCard($s, $seat);
+            if (count($legal) > 1 && self::shouldBlunder($s, $seat)) {
+                $card = $legal[random_int(0, count($legal) - 1)];
+            }
+            self::applyPlay($s, $seat, $card);
             return true;
         }
         return false;

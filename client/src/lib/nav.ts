@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type View = 'lobby' | 'room' | 'leaderboard' | 'profile' | 'shop' | 'settings';
+export type View = 'lobby' | 'room' | 'leaderboard' | 'profile' | 'shop' | 'settings' | 'admin';
 
 interface NavStore {
   view: View;

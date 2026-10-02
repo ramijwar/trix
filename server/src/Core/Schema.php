@@ -8,7 +8,7 @@ namespace Trix\Core;
  */
 final class Schema
 {
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     public static function statements(): array
     {
@@ -100,6 +100,52 @@ final class Schema
                 created_at INTEGER NOT NULL
             )",
             "CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, created_at DESC)",
+
+            // البطولات
+            "CREATE TABLE IF NOT EXISTS tournaments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                game TEXT NOT NULL DEFAULT 'tarnib',
+                capacity INTEGER NOT NULL DEFAULT 8,
+                start_at INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'registration',
+                round INTEGER NOT NULL DEFAULT 0,
+                winners TEXT NOT NULL DEFAULT '[]',
+                created_by INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            )",
+            "CREATE INDEX IF NOT EXISTS idx_tournaments_status ON tournaments(status, start_at)",
+
+            // المشاركون في البطولات
+            "CREATE TABLE IF NOT EXISTS tournament_players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tournament_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                avatar TEXT NOT NULL DEFAULT '🎴',
+                level INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'joined',
+                place INTEGER NOT NULL DEFAULT 0,
+                joined_at INTEGER NOT NULL,
+                UNIQUE (tournament_id, user_id)
+            )",
+            "CREATE INDEX IF NOT EXISTS idx_tplayers_t ON tournament_players(tournament_id)",
+
+            // طاولات البطولة (أدوار التصفيات)
+            "CREATE TABLE IF NOT EXISTS tournament_matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tournament_id INTEGER NOT NULL,
+                round INTEGER NOT NULL DEFAULT 1,
+                room_id TEXT NOT NULL DEFAULT '',
+                room_code TEXT NOT NULL DEFAULT '',
+                seats TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'waiting',
+                winner_seat INTEGER,
+                runner_seat INTEGER,
+                created_at INTEGER NOT NULL
+            )",
+            "CREATE INDEX IF NOT EXISTS idx_tmatches_t ON tournament_matches(tournament_id, round)",
 
             // أسئلة الشات السريع (يمكن تعديلها من لوحة التحكم)
             "CREATE TABLE IF NOT EXISTS meta (

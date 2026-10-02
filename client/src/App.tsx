@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './lib/store';
 import { useNav } from './lib/nav';
 import { unlockAudio } from './lib/audio';
@@ -12,6 +11,7 @@ import { LeaderboardScreen } from './screens/LeaderboardScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { ShopScreen } from './screens/ShopScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { AdminScreen } from './screens/AdminScreen';
 
 export default function App() {
   const booted = useStore((s) => s.booted);
@@ -57,14 +57,7 @@ export default function App() {
   if (!booted) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
-        <motion.div
-          initial={{ scale: 0.7, opacity: 0, rotate: -8 }}
-          animate={{ scale: 1, opacity: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 18 }}
-          className="text-6xl"
-        >
-          🃏
-        </motion.div>
+        <div className="text-6xl">🃏</div>
         <div className="gold-text text-2xl font-black">طرنيب أونلاين</div>
         <div className="flex items-center gap-2 text-sm text-ink-300">
           <span className="size-4 animate-spin rounded-full border-2 border-gold-500 border-t-transparent" />
@@ -99,23 +92,16 @@ export default function App() {
     profile: <ProfileScreen />,
     shop: <ShopScreen />,
     settings: <SettingsScreen />,
+    admin: <AdminScreen />,
   };
 
   return (
     <>
       <div className="mx-auto flex h-full max-w-3xl flex-col">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={view}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.22 }}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            {screens[view] ?? <LobbyScreen />}
-          </motion.div>
-        </AnimatePresence>
+        {/* بلا حركات انتقالية بين الشاشات: أسرع وبلا أي شاشة فارغة */}
+        <div key={view} className="flex min-h-0 flex-1 flex-col">
+          {screens[view] ?? screens.lobby}
+        </div>
       </div>
       <Toasts />
     </>

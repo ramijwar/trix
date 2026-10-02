@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import type { RoomState, RoundSummary as RoundSummaryData } from '../game/types';
 import { SUIT_SYMBOL, parseCard, type Suit } from '../game/types';
@@ -56,12 +55,12 @@ export function ScoreBar({ state }: { state: RoomState }) {
             <div key={i} className="rounded-xl bg-black/25 px-2 py-1.5">
               <div className="flex items-center justify-between text-xs font-bold" style={{ color: t.color }}>
                 <span>{t.team === state.myTeam ? 'فريقك' : 'الفريق الخصم'}</span>
-                <motion.span key={t.score} initial={{ scale: 1.4, color: '#fff' }} animate={{ scale: 1 }} className="text-base font-black">
+                <span className="text-base font-black">
                   {t.score}
-                </motion.span>
+                </span>
               </div>
               <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                <motion.div className="h-full rounded-full" style={{ background: t.color }} animate={{ width: `${t.pct}%` }} transition={{ duration: 0.28 }} />
+                <div className="h-full rounded-full" style={{ background: t.color, width: `${t.pct}%` }} />
               </div>
             </div>
           ))}
@@ -88,14 +87,10 @@ export function BidPanel({
   const mustChooseTrump = Boolean(state.mustChooseTrump);
   const suits: Suit[] = ['S', 'H', 'D', 'C'];
   return (
-    <AnimatePresence>
+    <>
       {show && (
-        <motion.div
+        <div
           key={mustChooseTrump ? 'trump' : 'bid'}
-          initial={{ y: 120, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 120, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 30 }}
           className="glass absolute inset-x-2 bottom-2 z-40 max-h-[74vh] overflow-y-auto rounded-3xl p-2.5 shadow-panel"
         >
           <div className="mb-2">
@@ -159,9 +154,9 @@ export function BidPanel({
               </div>
             </>
           )}
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }
 
@@ -185,13 +180,11 @@ export function RoundSummary({ state, onContinue }: { state: RoomState; onContin
   return (
     <Modal open={show} hideClose title={`نهاية الجولة ${s.round}`} maxWidth="max-w-sm">
       <div className="flex flex-col items-center gap-3">
-        <motion.div
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
+        <div
           className={cn('flex size-20 items-center justify-center rounded-full text-4xl', good ? 'bg-emerald-500/20' : 'bg-rose-500/20')}
         >
           {s.kaboot ? '👑' : good ? '🎉' : '😅'}
-        </motion.div>
+        </div>
         <div className="text-center">
           <div className="text-lg font-bold">
             {s.made ? 'نجح الطلب' : 'فشل الطلب'} — {s.bid} أكلات
@@ -245,9 +238,9 @@ export function GameOver({ state, onExit, onRematch }: { state: RoomState; onExi
   return (
     <Modal open={show} hideClose title={won ? 'فزتم بالمباراة! 🏆' : 'خسرنا هذه المرة'} maxWidth="max-w-sm">
       <div className="flex flex-col items-center gap-4">
-        <motion.div initial={{ scale: 0.4, rotate: -15 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 300 }} className="text-6xl">
+        <div className="text-6xl">
           {won ? '🏆' : '🤝'}
-        </motion.div>
+        </div>
         <div className="flex w-full items-center justify-around rounded-2xl bg-black/25 py-3">
           <div className="text-center">
             <div className="text-xs text-sky-400">الفريق الأزرق</div>
@@ -309,16 +302,12 @@ export function ChatDrawer({
   const messages = useMemo(() => (state.chat ?? []).slice(-40), [state.chat]);
   const emojis = ['👍', '😂', '😮', '🔥', '😎', '🙏', '👏', '😭'];
   return (
-    <AnimatePresence>
+    <>
       {open && (
         <>
-          <motion.div className="fixed inset-0 z-40 bg-black/50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-          <motion.div
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+          <div
             className="glass fixed inset-x-0 bottom-0 z-50 flex max-h-[75vh] flex-col rounded-t-3xl p-3"
-            initial={{ y: 400 }}
-            animate={{ y: 0 }}
-            exit={{ y: 400 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
           >
             <div className="mb-2 flex items-center justify-between">
               <span className="font-bold">الدردشة</span>
@@ -377,9 +366,9 @@ export function ChatDrawer({
                 إرسال
               </Button>
             </div>
-          </motion.div>
+          </div>
         </>
       )}
-    </AnimatePresence>
+    </>
   );
 }

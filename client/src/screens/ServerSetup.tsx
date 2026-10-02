@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { BUILT_IN_SERVER, pingServer, isNative } from '../lib/api';
 import { useStore } from '../lib/store';
 import { Button, Panel } from '../components/ui';
@@ -59,13 +58,11 @@ export function ServerSetupScreen() {
         <p className="mt-2 text-[11px] text-ink-500">لا تكتب /index.php في النهاية — يكفي رابط المجلد.</p>
 
         {result && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
+          <div
             className={`mt-3 rounded-2xl px-3 py-2 text-sm ${result.ok ? 'bg-emerald-900/60 text-emerald-200' : 'bg-rose-900/60 text-rose-200'}`}
           >
             {result.text}
-          </motion.div>
+          </div>
         )}
 
         <div className="mt-4 grid grid-cols-2 gap-2">

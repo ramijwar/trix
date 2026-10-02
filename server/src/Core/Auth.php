@@ -115,6 +115,19 @@ final class Auth
         if (!$row) {
             return null;
         }
+        /*
+         * ترقية تلقائية لمن اسمه ضمن أسماء المديرين في config.php
+         * (مسؤول اللعبة لا يحتاج تدخلاً يدوياً في قاعدة البيانات).
+         */
+        if (empty($row['is_admin'])) {
+            foreach ((array) Config::get('admin_users', ['admin']) as $n) {
+                if (strcasecmp(trim((string) $n), (string) $row['username']) === 0) {
+                    Db::exec('UPDATE users SET is_admin = 1 WHERE id = ?', [(int) $row['id']]);
+                    $row['is_admin'] = 1;
+                    break;
+                }
+            }
+        }
         self::$user = $row;
         return $row;
     }
@@ -125,6 +138,9 @@ final class Auth
         $u = self::user();
         if ($u === null) {
             Http::fail('الجلسة منتهية، سجّل الدخول من جديد', 401, 'unauthenticated');
+        }
+        if (!empty($u['is_banned'])) {
+            Http::fail('تم إيقاف حسابك، راجع إدارة اللعبة', 403, 'banned');
         }
         Db::update('users', ['last_seen' => time()], 'id = ?', [$u['id']]);
         return $u;

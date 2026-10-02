@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { api } from '../lib/api';
 import { BottomNav, TopBar } from '../components/Nav';
 import { Avatar, EmptyState, Panel, Spinner } from '../components/ui';
@@ -26,12 +25,9 @@ export function LeaderboardScreen() {
         {loading && <Spinner label="جارٍ التحميل…" />}
         {!loading && players.length === 0 && <EmptyState icon="🏆" title="لا يوجد متصدرون بعد" hint="العب أول مباراة لتظهر هنا!" />}
         <div className="space-y-2">
-          {players.map((p, i) => (
-            <motion.div
+          {players.map((p) => (
+            <div
               key={p.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i * 0.03, 0.4) }}
               className={cn('glass flex items-center gap-3 rounded-2xl p-3', p.rank <= 3 && 'ring-1 ring-gold-500/40')}
             >
               <div className="w-8 text-center text-lg font-black text-gold-300">{medal(p.rank)}</div>
@@ -46,7 +42,7 @@ export function LeaderboardScreen() {
                 <div className="text-sm font-black text-gold-300">{p.xp}</div>
                 <div className="text-[10px] text-ink-500">خبرة</div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
         {!loading && players.length > 0 && (

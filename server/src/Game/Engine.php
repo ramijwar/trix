@@ -750,6 +750,28 @@ final class Engine
     }
 
     /** تنفيذ حركة بوت واحد إن كان الدور عليه */
+    /** مهارة البوت من مستواه: 0.05 مبتدئ … 1 محترف */
+    public static function botSkill(array $s, int $seat): float
+    {
+        $pl = $s['seats'][$seat] ?? null;
+        if ($pl === null) {
+            return 0.5;
+        }
+        if (isset($pl['botSkills'])) {
+            return max(0.05, min(1.0, (float) $pl['botSkills']));
+        }
+        return max(0.05, min(1.0, ((int) ($pl['level'] ?? 1)) / 40));
+    }
+
+    /** هل يخطئ البوت هذه المرة؟ (البوت الضعيف يخطئ أكثر — كي لا يكون أقوى من اللاعب) */
+    public static function shouldBlunder(array $s, int $seat): bool
+    {
+        $skill = self::botSkill($s, $seat);
+        // مستوى 1 → نحو 45% اختيارات عشوائية، مستوى 40 → صفر
+        $chance = (int) round(max(0.0, (1.0 - $skill) * 50));
+        return $chance > 0 && random_int(1, 100) <= $chance;
+    }
+
     public static function botAct(array &$s): bool
     {
         if (!in_array($s['phase'], ['bidding', 'playing'], true)) {
@@ -807,6 +829,13 @@ final class Engine
         }
         // مرحلة اللعب
         $card = self::botChooseCard($s, $seat);
+        // بوت بمستوى منخفض: قد يلعب ورقة قانونية لكن غير مثالية
+        if (self::shouldBlunder($s, $seat)) {
+            $legal = self::legalPlays($s['hands'][$seat], $s['trick']);
+            if (count($legal) > 1) {
+                $card = $legal[random_int(0, count($legal) - 1)];
+            }
+        }
         self::applyPlay($s, $seat, $card);
         return true;
     }

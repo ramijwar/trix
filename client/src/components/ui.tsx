@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from 'framer-motion';
 import type { ReactNode, ButtonHTMLAttributes } from 'react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/store';
@@ -86,24 +85,16 @@ export function Modal({
   maxWidth?: string;
   hideClose?: boolean;
 }) {
+  if (!open) return null;
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => onClose?.()}
-        >
-          <motion.div
-            className={cn('glass w-full overflow-hidden rounded-3xl shadow-panel', maxWidth)}
-            initial={{ y: 40, scale: 0.96, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: 30, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            onClick={(e) => e.stopPropagation()}
-          >
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center"
+      onClick={() => onClose?.()}
+    >
+      <div
+        className={cn('glass w-full overflow-hidden rounded-3xl shadow-panel', maxWidth)}
+        onClick={(e) => e.stopPropagation()}
+      >
             {title && (
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                 <div className="text-base font-bold">{title}</div>
@@ -114,11 +105,9 @@ export function Modal({
                 )}
               </div>
             )}
-            <div className="max-h-[75vh] overflow-y-auto p-4">{children}</div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        <div className="max-h-[75vh] overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -135,21 +124,15 @@ export function Toasts() {
   };
   return (
     <div className="pointer-events-none fixed inset-x-0 top-3 z-[70] flex flex-col items-center gap-2 px-4">
-      <AnimatePresence>
-        {toasts.map((t) => (
-          <motion.button
-            key={t.id}
-            layout
-            initial={{ y: -30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -20, opacity: 0 }}
-            onClick={() => dismiss(t.id)}
-            className={cn('pointer-events-auto w-full max-w-sm rounded-2xl border px-4 py-2.5 text-center text-sm font-semibold shadow-panel backdrop-blur', colors[t.kind])}
-          >
-            {t.text}
-          </motion.button>
-        ))}
-      </AnimatePresence>
+      {toasts.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => dismiss(t.id)}
+          className={cn('pointer-events-auto w-full max-w-sm rounded-2xl border px-4 py-2.5 text-center text-sm font-semibold shadow-panel', colors[t.kind])}
+        >
+          {t.text}
+        </button>
+      ))}
     </div>
   );
 }
@@ -208,12 +191,7 @@ export function XpBar({ into, need }: { into: number; need: number }) {
   const pct = Math.min(100, Math.round((into / Math.max(1, need)) * 100));
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-      <motion.div
-        className="h-full rounded-full bg-gradient-to-r from-gold-300 to-gold-600"
-        initial={{ width: 0 }}
-        animate={{ width: `${pct}%` }}
-        transition={{ duration: 0.35, ease: 'easeOut' }}
-      />
+      <div className="h-full rounded-full bg-gradient-to-r from-gold-300 to-gold-600" style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -237,25 +215,8 @@ export function EmptyState({ icon, title, hint }: { icon: string; title: string;
   );
 }
 
-/** قصاصات احتفالية */
+/** احتفال مبسّط بلا حركات ثقيلة */
 export function Confetti({ show }: { show: boolean }) {
   if (!show) return null;
-  const colors = ['#d4af37', '#38bdf8', '#fb923c', '#22c55e', '#f5e3a3', '#ef4444'];
-  const pieces = Array.from({ length: 34 }, (_, i) => i);
-  return (
-    <>
-      {pieces.map((i) => (
-        <span
-          key={i}
-          className="confetti-piece"
-          style={{
-            left: `${Math.random() * 100}%`,
-            background: colors[i % colors.length],
-            animationDuration: `${1.5 + Math.random() * 1.3}s`,
-            animationDelay: `${Math.random() * 0.6}s`,
-          }}
-        />
-      ))}
-    </>
-  );
+  return <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center text-6xl">🎉</div>;
 }

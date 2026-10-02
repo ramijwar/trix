@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { cn, cardRank, cardSuit, isRedCard } from '../lib/utils';
 import { SUIT_SYMBOL } from '../game/types';
 
@@ -31,8 +30,8 @@ export function CardView({ code, size = 'md', faceDown, back = 'red', dim, glow,
   const red = isRedCard(code);
 
   return (
-    <motion.div
-      layoutId={layoutId}
+    <div
+      data-layout-id={layoutId}
       onClick={onClick}
       style={{ width: s.w, height: s.h, ...style }}
       className={cn(
@@ -44,8 +43,6 @@ export function CardView({ code, size = 'md', faceDown, back = 'red', dim, glow,
         onClick && 'cursor-pointer',
         className,
       )}
-      whileTap={onClick ? { scale: 0.94 } : undefined}
-      animate={{ scale: 1 }}
     >
       {!faceDown && (
         <>
@@ -69,7 +66,7 @@ export function CardView({ code, size = 'md', faceDown, back = 'red', dim, glow,
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 

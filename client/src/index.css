@@ -110,9 +110,7 @@ body {
     transform: translateY(0) scale(1);
   }
 }
-.anim-float-in {
-  animation: floatIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+.anim-float-in { animation: none; }
 
 @keyframes cardDeal {
   from {
@@ -124,9 +122,7 @@ body {
     transform: translate(0, 0) rotate(0) scale(1);
   }
 }
-.anim-deal {
-  animation: cardDeal 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+.anim-deal { animation: none; }
 
 @keyframes popIn {
   0% {
@@ -141,9 +137,7 @@ body {
     opacity: 1;
   }
 }
-.anim-pop {
-  animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
+.anim-pop { animation: none; }
 
 @keyframes pulseRing {
   0% {
@@ -156,9 +150,7 @@ body {
     box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
   }
 }
-.anim-turn-ring {
-  animation: pulseRing 1.6s ease-out infinite;
-}
+.anim-turn-ring { box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.5); }
 
 @keyframes shimmer {
   0% {
@@ -168,11 +160,7 @@ body {
     background-position: 200% 0;
   }
 }
-.anim-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 2.2s linear infinite;
-}
+.anim-shimmer { animation: none; }
 
 @keyframes floatY {
   0%,
@@ -183,9 +171,7 @@ body {
     transform: translateY(-6px);
   }
 }
-.anim-float {
-  animation: floatY 3.4s ease-in-out infinite;
-}
+.anim-float { animation: none; }
 
 @keyframes confettiFall {
   0% {
@@ -197,15 +183,7 @@ body {
     opacity: 0.9;
   }
 }
-.confetti-piece {
-  position: fixed;
-  top: 0;
-  width: 9px;
-  height: 14px;
-  border-radius: 2px;
-  animation: confettiFall linear forwards;
-  z-index: 60;
-}
+.confetti-piece { display: none; }
 
 /* بطاقة اللعب */
 .playing-card {
@@ -215,8 +193,6 @@ body {
   box-shadow:
     0 6px 14px -6px rgba(0, 0, 0, 0.7),
     inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-  transform-style: preserve-3d;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 .playing-card.red {
   color: #c81e2b;

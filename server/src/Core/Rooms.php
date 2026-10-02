@@ -161,6 +161,109 @@ final class Rooms
         return $room;
     }
 
+    /**
+     * إنشاء غرفة بطولة: ٤ مقاعد (لاعبون حقيقيون + بوتات) وتبدأ تلقائياً.
+     * تُستخدم من نظام البطولات فقط.
+     */
+    public static function createTournamentRoom(array $tournament, array $seats): array
+    {
+        $players = [];
+        for ($i = 0; $i < 4; $i++) {
+            $p = $seats[$i] ?? null;
+            if ($p === null) {
+                $players[] = null;
+                continue;
+            }
+            $players[] = [
+                'userId' => (int) $p['userId'],
+                'name' => (string) ($p['name'] ?? 'لاعب'),
+                'avatar' => (string) ($p['avatar'] ?? '🎴'),
+                'level' => (int) ($p['level'] ?? 1),
+                'isBot' => !empty($p['isBot']),
+                'connected' => true,
+                'ready' => true,
+                'seat' => $i,
+                'team' => $i % 2,
+                'lastSeen' => Engine::now(),
+                'botSkills' => self::skillFor((int) ($p['level'] ?? 1)),
+            ];
+        }
+        $hostId = 0;
+        foreach ($players as $p) {
+            if ($p !== null && empty($p['isBot']) && (int) $p['userId'] > 0) {
+                $hostId = (int) $p['userId'];
+                break;
+            }
+        }
+        $settings = self::sanitizeSettings([
+            'game' => (string) ($tournament['game'] ?? 'tarnib'),
+            'target' => 31,
+            'kingdoms' => 1,
+            'allowDouble' => true,
+            'turnTime' => 30,
+            'bidTime' => 20,
+        ]);
+        $now = time();
+        $id = bin2hex(random_bytes(8));
+        $code = self::generateCode();
+        $state = [
+            'phase' => 'waiting',
+            'settings' => $settings,
+            'target' => (int) $settings['target'],
+            'seats' => $players,
+            'hands' => [[], [], [], []],
+            'play' => [],
+            'trick' => [],
+            'tricks' => [0, 0],
+            'scores' => [0, 0],
+            'round' => 0,
+            'log' => [],
+            'chat' => [],
+            'version' => 1,
+            'eventId' => 0,
+            'chatId' => 0,
+            'swap' => [],
+            'hostId' => $hostId,
+            'recorded' => false,
+            'tournamentId' => (int) ($tournament['id'] ?? 0),
+            'tournamentName' => (string) ($tournament['name'] ?? 'بطولة'),
+            'createdAt' => $now,
+            'lastActivity' => $now,
+            'turnStartedAt' => Engine::now(),
+        ];
+        $state = self::stampSeats($state);
+        Db::insert('rooms', [
+            'id' => $id,
+            'code' => $code,
+            'name' => mb_substr('🏆 ' . (string) ($tournament['name'] ?? 'بطولة'), 0, 24),
+            'host_id' => $hostId,
+            'is_private' => 1,
+            'password' => '',
+            'settings' => json_encode($settings, JSON_UNESCAPED_UNICODE),
+            'state' => json_encode($state, JSON_UNESCAPED_UNICODE),
+            'version' => 1,
+            'status' => 'waiting',
+            'seat0' => (int) ($players[0]['userId'] ?? 0),
+            'seat1' => (int) ($players[1]['userId'] ?? 0),
+            'seat2' => (int) ($players[2]['userId'] ?? 0),
+            'seat3' => (int) ($players[3]['userId'] ?? 0),
+            'created_at' => $now,
+            'updated_at' => $now,
+            'last_activity' => $now,
+        ]);
+        $room = self::find($id);
+        if ($room === null) {
+            Http::fail('تعذّر إنشاء غرفة البطولة', 500);
+        }
+        self::act($id, function (array &$r, array &$st) use ($players): array {
+            $st['seats'] = $players;
+            return [];
+        }, false);
+        // بدء المباراة تلقائياً (البوتات مكتملة واللاعبون جاهزون)
+        self::start(['id' => $hostId], $id, true);
+        return self::requireRoom($id);
+    }
+
     public static function find(string $idOrCode): ?array
     {
         $idOrCode = trim($idOrCode);
@@ -283,6 +386,13 @@ final class Rooms
         } finally {
             Db::unlock($lock);
         }
+    }
+
+    /** مهارة البوت بحسب مستواه: 1 = مبتدئ … 40 = محترف (لا يتجاوز مهارة من أضافه) */
+    public static function skillFor(int $level): float
+    {
+        $lv = max(1, min(40, $level));
+        return round($lv / 40, 4);
     }
 
     /** حفظ الحالة في قاعدة البيانات */
@@ -607,6 +717,12 @@ final class Rooms
             }
             $names = ['بوت سامي', 'بوت ليلى', 'بوت كريم', 'بوت نور', 'بوت هدى', 'بوت زياد'];
             $avatars = ['🤖', '👾', '🐯', '🦊', '🐬', '🦅'];
+            /*
+             * البوت بنفس مستوى اللاعب الذي أضافه — وليس أقوى منه:
+             * نأخذ مستوى المُضيف نفسه (وليس مستويات عشوائية عالية).
+             */
+            $me = $state['seats'][self::seatOf($state, (int) $user['id'])] ?? null;
+            $botLevel = max(1, (int) ($me['level'] ?? (int) ($user['level'] ?? 1)));
             $targets = $seat === null ? self::preferredSeats($state) : [$seat];
             if (!$targets) {
                 Http::fail('لا يوجد مقعد فارغ', 409, 'no_free_seat');
@@ -616,7 +732,8 @@ final class Rooms
                 'userId' => -1 - $t,
                 'name' => $names[$t % count($names)],
                 'avatar' => $avatars[$t % count($avatars)],
-                'level' => random_int(3, 40),
+                'level' => $botLevel,
+                'botSkills' => self::skillFor($botLevel),
                 'isBot' => true,
                 'connected' => true,
                 'ready' => true,

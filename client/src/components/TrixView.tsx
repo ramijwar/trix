@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import type { RoomState, TrixContract, TrixSummary } from '../game/types';
 import {
   RANK_LABEL,
@@ -7,7 +6,6 @@ import {
   SUIT_SYMBOL,
   TRIX_CONTRACTS,
   TRIX_CONTRACT_AR,
-  TRIX_CONTRACT_HINT,
   TRIX_CONTRACT_ICON,
   parseCard,
 } from '../game/types';
@@ -78,9 +76,8 @@ function TrixScoreboard({ state }: { state: RoomState }) {
   return (
     <div className="no-scrollbar mx-2 mb-2 flex gap-2 overflow-x-auto">
       {rows.map((r, i) => (
-        <motion.div
+        <div
           key={r.seat}
-          layout
           className={cn(
             'glass min-w-[104px] flex-1 rounded-2xl px-2 py-1.5',
             r.seat === state.mySeat && 'ring-2 ring-gold-400/70',
@@ -99,20 +96,18 @@ function TrixScoreboard({ state }: { state: RoomState }) {
           </div>
           <div className="mt-0.5 flex items-center justify-between">
             <span className="text-base font-black text-gold-300">{r.total}</span>
-            <AnimatePresence>
+            <>
               {r.delta !== 0 && (
-                <motion.span
+                <span
                   key={r.delta}
-                  initial={{ scale: 1.5, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
                   className={cn('text-[11px] font-bold', r.delta > 0 ? 'text-emerald-400' : 'text-rose-400')}
                 >
                   {r.delta > 0 ? `+${r.delta}` : r.delta}
-                </motion.span>
+                </span>
               )}
-            </AnimatePresence>
+            </>
           </div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );
@@ -123,18 +118,13 @@ function ContractPicker({ state, onPick }: { state: RoomState; onPick: (c: TrixC
   const tx = state.trix!;
   return (
     <Modal open onClose={() => {}} title="👑 اختيار التسمية">
-      <p className="mb-2 text-xs leading-relaxed text-ink-300">
-        أنت صاحب المملكة {tx.kingdom}/{tx.kingdoms} — اختر التسمية التي تريد لعبها الآن.
-        الأقل ضرراً على يدك هو الأفضل، وبقيت لك {tx.legalContracts.length} تسميات.
-      </p>
+      <p className="mb-2 text-xs text-ink-300">اختر التسمية ({tx.legalContracts.length} متاحة)</p>
       <div className="mb-3">
         <MiniHand cards={state.myHand} label="أوراقك — شاهدها قبل اختيار التسمية" />
       </div>
       <div className="grid gap-2">
         {TRIX_CONTRACTS.map((c) => {
           const used = tx.used.includes(c);
-          const idx = TRIX_CONTRACTS.indexOf(c) + 1;
-          const played = tx.used.length;
           return (
             <button
               key={c}
@@ -149,11 +139,8 @@ function ContractPicker({ state, onPick }: { state: RoomState; onPick: (c: TrixC
               <span className="text-2xl">{TRIX_CONTRACT_ICON[c]}</span>
               <span className="flex-1">
                 <span className="block text-sm font-black">{TRIX_CONTRACT_AR[c]}</span>
-                <span className="block text-[11px] opacity-90">{TRIX_CONTRACT_HINT[c]}</span>
               </span>
-              <span className="rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-bold">
-                {used ? 'لُعبت ✓' : `متاحة ${idx > played ? '' : ''}`}
-              </span>
+              {used && <span className="rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-bold">لُعبت ✓</span>}
             </button>
           );
         })}
@@ -168,11 +155,7 @@ function RevealPanel({ state, actions }: { state: RoomState; actions: RoomAction
   const revealed = Object.keys(tx.revealed ?? {});
   return (
     <Modal open onClose={() => {}} title="🃏 فرصة التدبيل">
-      <p className="mb-2 text-xs leading-relaxed text-ink-300">
-        {tx.contract === 'kbeh'
-          ? 'إن كنت تحمل K♥ يمكنك كشفه (تدبيله): من يأخذه يخسر 150 بدلاً من 75، وأنت تكسب 75 إن أخذه غيرك.'
-          : 'إن كنت تحمل أي بنت (Q) يمكنك كشفها: من يأخذها يخسر 50 بدلاً من 25، وأنت تكسب 25 إن أخذها غيرك.'}
-      </p>
+      <p className="mb-2 text-xs text-ink-300">اكشف ورقتك للمضاعفة، أو تابع بلا تدبيل.</p>
       <div className="mb-3">
         <MiniHand cards={state.myHand} label="أوراقك" />
       </div>
@@ -268,11 +251,8 @@ function TrixGameOver({ state, onExit, onRematch }: { state: RoomState; onExit: 
     <Modal open onClose={onExit} title="انتهت مباراة التركس 🧩">
       <div className="space-y-2">
         {rows.map((r, i) => (
-          <motion.div
+          <div
             key={r.seat}
-            initial={{ x: 30, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: i * 0.12 }}
             className={cn('flex items-center gap-2 rounded-2xl px-3 py-2', i === 0 ? 'bg-gold-500/25 ring-2 ring-gold-400/70' : 'bg-black/25')}
           >
             <span className="text-2xl">{medals[i]}</span>
@@ -282,7 +262,7 @@ function TrixGameOver({ state, onExit, onRematch }: { state: RoomState; onExit: 
               <div className="text-[11px] text-ink-300">{r.seat === state.mySeat ? 'أنت' : `المقعد ${r.seat + 1}`}</div>
             </div>
             <span className="text-lg font-black text-gold-300">{r.total}</span>
-          </motion.div>
+          </div>
         ))}
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -357,16 +337,6 @@ export function TrixView({
         </div>
       </header>
 
-      {/* شارة التسمية الحالية */}
-      {contract && (
-        <div className="mx-2 mb-1 flex items-center justify-between gap-2 rounded-2xl bg-black/40 px-3 py-1.5 text-xs">
-          <span className="font-black">
-            {TRIX_CONTRACT_ICON[contract]} {TRIX_CONTRACT_AR[contract]}
-          </span>
-          <span className="text-ink-300">{TRIX_CONTRACT_HINT[contract]}</span>
-        </div>
-      )}
-
       <TrixScoreboard state={state} />
 
       {/* الطاولة */}
@@ -375,15 +345,14 @@ export function TrixView({
         onPlayCard={(code) => actions.play(code)}
         cardBack="blue"
         hideTrick={isTrixContract}
-        badge={
-          isTrixContract ? (
-            <Piles state={state} nameOf={nameOf} />
-          ) : contract && state.phase === 'playing' && state.trick.length === 0 ? (
-            <div className="glass rounded-full px-3 py-1 text-xs font-bold text-ink-200">
-              {TRIX_CONTRACT_ICON[contract]} {TRIX_CONTRACT_AR[contract]} — يفوز بالأكلة أعلى ورقة من اللون المطروح
-            </div>
+        corner={
+          contract ? (
+            <span className="rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-black text-gold-300 ring-1 ring-gold-500/30">
+              {TRIX_CONTRACT_ICON[contract]} {TRIX_CONTRACT_AR[contract]}
+            </span>
           ) : null
         }
+        badge={isTrixContract ? <Piles state={state} nameOf={nameOf} /> : null}
         seatBadge={(seat) => {
           const left = state.handCounts[seat] ?? 0;
           const isKing = seat === tx.kingSeat;
@@ -401,19 +370,7 @@ export function TrixView({
             أوراقك: {state.myHand.length} • أكلاتك: {tx.trickCounts[state.mySeat] ?? 0}
           </span>
         }
-        hint={
-          isTrixContract ? (
-            state.isMyTurn && state.phase === 'playing' ? (
-              <div className="mt-1 text-center text-xs text-gold-300">
-                {state.legalCards.length > 0 ? 'العب ورقة ملاصقة لمجموعة أو ابدأ مجموعة بالشاب J' : 'لا تملك ورقة مناسبة — سيتم تمرير دورك'}
-              </div>
-            ) : null
-          ) : state.phase === 'playing' && state.isMyTurn && state.trick.length > 0 ? (
-            <div className="mt-1 text-center text-xs text-ink-300">
-              {contract === 'diamonds' ? 'تجنّب أخذ الديناري 💎' : contract === 'queens' ? 'تجنّب أخذ البنات 👸' : contract === 'kbeh' ? 'تجنّب أخذ K♥ 👑' : 'تجنّب أخذ الأكلة 🎴'}
-            </div>
-          ) : null
-        }
+        hint={null}
       />
 
       {/* اختيار التسمية */}
@@ -424,9 +381,7 @@ export function TrixView({
 
       {/* انتظار اختيار الملك */}
       {!tx.mustChooseContract && !tx.contract && state.phase === 'choosing' && (
-        <div className="mx-2 mb-2 rounded-2xl bg-black/40 py-2 text-center text-xs text-ink-200">
-          👑 {nameOf(tx.kingSeat)} يختار التسمية… ({tx.used.length}/5 لُعبت في هذه المملكة)
-        </div>
+        <div className="mx-2 mb-1 text-center text-[11px] text-ink-300">👑 يختار التسمية…</div>
       )}
 
       {/* ملخص التسمية */}

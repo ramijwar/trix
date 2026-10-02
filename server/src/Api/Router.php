@@ -91,6 +91,23 @@ final class Router
                 case 'game/contract': RoomApi::contract(); return;
                 case 'game/reveal': RoomApi::reveal(); return;
 
+                // ============ لوحة المدير ============
+                case 'admin/stats': AdminApi::stats(); return;
+                case 'admin/today': AdminApi::today(); return;
+                case 'admin/users': AdminApi::users(); return;
+                case 'admin/user/action': AdminApi::userAction(); return;
+                case 'admin/tournaments': AdminApi::tournaments(); return;
+                case 'admin/tournament/create': AdminApi::createTournament(); return;
+                case 'admin/tournament/update': AdminApi::updateTournament(); return;
+                case 'admin/tournament/status': AdminApi::tournamentStatus(); return;
+                case 'admin/tournament/start': AdminApi::tournamentStart(); return;
+                case 'admin/tournament/advance': AdminApi::tournamentAdvance(); return;
+
+                // ============ البطولات (لللاعبين) ============
+                case 'tournaments': AdminApi::myTournaments(); return;
+                case 'tournament/join': AdminApi::tournamentJoin(); return;
+                case 'tournament/leave': AdminApi::tournamentLeave(); return;
+
                 default:
                     Http::fail('مسار غير معروف: ' . $route, 404, 'not_found');
             }

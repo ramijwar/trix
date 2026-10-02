@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import type { RoomState, SeatPlayer } from '../game/types';
 import { SUIT_SYMBOL, TEAM_OF_SEAT, type Suit } from '../game/types';
@@ -155,9 +154,11 @@ interface TableProps {
   footer?: React.ReactNode;
   /** إخفاء أوراق الأكلة في الوسط (لأن التركس يعرض المجموعات) */
   hideTrick?: boolean;
+  /** شارة صغيرة في الزاوية اليمنى العليا من الطاولة (نوع التسمية/الطرنيب) */
+  corner?: React.ReactNode;
 }
 
-export function GameTable({ state, onPlayCard, cardBack, shake, children, badge, seatBadge, hint, footer, hideTrick }: TableProps) {
+export function GameTable({ state, onPlayCard, cardBack, shake, children, badge, seatBadge, hint, footer, hideTrick, corner }: TableProps) {
   const mySeat = state.mySeat;
   const relOf = (seat: number) => relativeSeat(mySeat, seat) as 0 | 1 | 2 | 3;
   const turnDeadline =
@@ -169,49 +170,35 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
         <div className="pointer-events-none absolute inset-3 rounded-[1.7rem] border border-gold-500/20" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.14] [background:repeating-linear-gradient(45deg,rgba(255,255,255,.06)_0_2px,transparent_2px_6px)]" />
 
+        {/* شارة الزاوية اليمنى العليا */}
+        {corner && <div className="pointer-events-none absolute right-2 top-2 z-20">{corner}</div>}
+
         {/* شارات الوسط */}
         <div className="absolute left-1/2 top-1/2 z-[5] flex max-w-[92%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
           {badge}
-          <AnimatePresence>
-            {state.trump && (
-              <motion.div
-                key={state.trump}
-                initial={{ scale: 0.4, opacity: 0, rotate: -12 }}
-                animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                exit={{ opacity: 0 }}
-                className="glass flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold shadow-panel"
-              >
-                <span className="text-ink-300">الطرنيب</span>
-                <span className={cn('text-xl', state.trump === 'H' || state.trump === 'D' ? 'text-rose-400' : 'text-white')}>
-                  {state.trump === 'NT' ? '🚫' : SUIT_SYMBOL[state.trump as Suit]}
-                </span>
-                {state.bid.doubled && <span className="rounded-full bg-rose-600 px-2 text-[11px] font-extrabold">مضاعف ×2</span>}
-              </motion.div>
-            )}
-            {!state.trump && state.bid.value !== null && (
-              <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-full px-3 py-1 text-sm font-bold">
-                أعلى طلب: <span className="text-gold-300">{state.bid.value}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {state.trump && (
+            <div className="glass flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold shadow-panel">
+              <span className="text-ink-300">الطرنيب</span>
+              <span className={cn('text-xl', state.trump === 'H' || state.trump === 'D' ? 'text-rose-400' : 'text-white')}>
+                {state.trump === 'NT' ? '🚫' : SUIT_SYMBOL[state.trump as Suit]}
+              </span>
+              {state.bid.doubled && <span className="rounded-full bg-rose-600 px-2 text-[11px] font-extrabold">مضاعف ×2</span>}
+            </div>
+          )}
+          {!state.trump && state.bid.value !== null && (
+            <div className="glass rounded-full px-3 py-1 text-sm font-bold">
+              أعلى طلب: <span className="text-gold-300">{state.bid.value}</span>
+            </div>
+          )}
         </div>
 
         {/* أوراق الأكلة */}
         <div className={cn('absolute inset-0 z-10', hideTrick && 'hidden')}>
-          <AnimatePresence>
-            {state.trick.map((tc) => (
-              <motion.div
-                key={tc.card + '-' + tc.seat}
-                className={cn('absolute', TRICK_POS[relOf(tc.seat)])}
-                initial={{ scale: 0.7, opacity: 0, y: 14 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                transition={{ duration: 0.14, ease: 'easeOut' }}
-              >
-                <CardView code={tc.card} size="md" />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+          {state.trick.map((tc) => (
+            <div key={tc.card + '-' + tc.seat} className={cn('absolute', TRICK_POS[relOf(tc.seat)])}>
+              <CardView code={tc.card} size="md" />
+            </div>
+          ))}
         </div>
 
         {/* المقاعد */}
@@ -257,13 +244,7 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
             const legal = !state.isMyTurn || state.legalCards.includes(c);
             const playable = state.isMyTurn && state.phase === 'playing' && legal;
             return (
-              <motion.div
-                key={c}
-                initial={{ y: 14, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: Math.min(i * 0.006, 0.06), duration: 0.16, ease: 'easeOut' }}
-                className={cn('shrink-0', i > 0 && '-mr-3')}
-              >
+              <div key={c} className={cn('shrink-0', i > 0 && '-mr-3')}>
                 <CardView
                   code={c}
                   size="md"
@@ -271,14 +252,11 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
                   onClick={playable ? () => onPlayCard(c) : undefined}
                   className={cn(playable && 'hover:-translate-y-2')}
                 />
-              </motion.div>
+              </div>
             );
           })}
         </div>
-        {hint ??
-          (state.phase === 'playing' && state.isMyTurn && state.trick.length > 0 ? (
-            <div className="mt-1 text-center text-xs text-ink-300">اختر ورقة — يجب اتباع اللون إن كان متاحاً</div>
-          ) : null)}
+        {hint}
       </div>
     </div>
   );

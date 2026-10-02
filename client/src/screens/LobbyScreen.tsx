@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { useNav } from '../lib/nav';
+import { TournamentsPanel } from './AdminScreen';
 import { BottomNav, TopBar } from '../components/Nav';
 import { Avatar, Button, Modal, Panel, SectionTitle, Spinner, XpBar } from '../components/ui';
 import type { LobbyStats, RoomListItem } from '../game/types';
@@ -117,15 +117,22 @@ export function LobbyScreen() {
       <TopBar
         title="الردهة"
         right={
-          <button onClick={() => go('settings')} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
-            ⚙️
-          </button>
+          <div className="flex items-center gap-1">
+            {user.isAdmin && (
+              <button onClick={() => go('admin')} className="rounded-2xl border border-gold-500/40 bg-gold-500/10 px-3 py-1.5 text-sm">
+                🛡️
+              </button>
+            )}
+            <button onClick={() => go('settings')} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
+              ⚙️
+            </button>
+          </div>
         }
       />
 
       <div className="flex-1 overflow-y-auto px-3 pb-2">
         {/* بطاقة اللاعب */}
-        <Panel className="anim-float-in mb-3">
+        <Panel className="mb-3">
           <div className="flex items-center gap-3">
             <Avatar emoji={user.avatar} size={56} frame={user.avatarFrame} />
             <div className="min-w-0 flex-1">
@@ -193,7 +200,9 @@ export function LobbyScreen() {
         )}
 
         {/* قائمة الغرف */}
-        <SectionTitle icon={<span>🃏</span>} action={<span className="text-xs text-ink-500">تُحدَّث تلقائياً</span>}>
+        <TournamentsPanel />
+
+        <SectionTitle icon={<span>🃏</span>}>
           الطاولات المتاحة
         </SectionTitle>
 
@@ -205,9 +214,8 @@ export function LobbyScreen() {
         )}
         <div className="space-y-2">
           {rooms.map((r) => (
-            <motion.button
+            <button
               key={r.id}
-              layout
               onClick={() => enterRoom(r.id, r.code)}
               className="glass flex w-full items-center gap-3 rounded-2xl p-3 text-right transition active:scale-[.99]"
             >
@@ -241,7 +249,7 @@ export function LobbyScreen() {
                 </div>
               </div>
               <div className="text-[10px] text-ink-500">{timeAgo(Math.max(0, Math.floor(Date.now() / 1000) - r.updatedAt))}</div>
-            </motion.button>
+            </button>
           ))}
         </div>
       </div>
@@ -346,7 +354,6 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
                 </button>
               ))}
             </div>
-            <p className="mt-1 text-[11px] text-ink-500">كل مملكة = ٥ تسميات (الكبة، البنات، الديناري، اللطوش، التركس) = ٢٠ توزيعة في المباراة الكاملة.</p>
           </div>
         )}
 
@@ -412,11 +419,6 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
         <Button variant="gold" full size="lg" loading={busy} onClick={() => void create()}>
           إنشاء الطاولة
         </Button>
-        <p className="text-center text-[11px] text-ink-500">
-          {game === 'trix'
-            ? 'التركس لعبة فردية: كل لاعب لنفسه، والفائز صاحب أعلى مجموع — يمكنك إضافة بوتات للتدريب.'
-            : 'الشركاء: كل لاعبين متقابلين فريق واحد — يمكنك دعوة صديق ليجلس مقابل لك.'}
-        </p>
       </div>
     </Modal>
   );

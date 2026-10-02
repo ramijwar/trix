@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { useStore } from '../lib/store';
 import { useNav } from '../lib/nav';
 import { isNative } from '../lib/api';
@@ -67,28 +66,13 @@ export function AuthScreen() {
 
   return (
     <div className="screen-bg relative flex h-full flex-col items-center justify-center overflow-hidden p-4">
-      {/* أوراق متطايرة في الخلفية */}
-      {[...Array(6)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="pointer-events-none absolute text-3xl opacity-20"
-          initial={{ x: `${(i * 17) % 90}%`, y: '-10%', rotate: 0 }}
-          animate={{ y: '110%', rotate: 360 }}
-          transition={{ duration: 12 + i * 3, repeat: Infinity, delay: i * 1.6, ease: 'linear' }}
-        >
-          {['🃏', '♠️', '♥️', '♦️', '♣️', '🎴'][i]}
-        </motion.div>
-      ))}
-
-      <motion.div
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+      <div
         className="relative z-10 mb-5 text-center"
       >
-        <div className="anim-float text-5xl">🃏</div>
+        <div className="text-5xl">🃏</div>
         <h1 className="gold-text mt-2 text-3xl font-black tracking-tight">طرنيب أونلاين</h1>
-        <p className="mt-1 text-sm text-ink-300">لعبة الورق الأكثر شعبية — 4 لاعبين، شركاء متقابلين</p>
-      </motion.div>
+
+      </div>
 
       <Panel className="relative z-10 w-full max-w-sm" glow>
         <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-black/25 p-1">
