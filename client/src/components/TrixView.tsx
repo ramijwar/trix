@@ -13,6 +13,7 @@ import {
 } from '../game/types';
 import { cn, shareText } from '../lib/utils';
 import { Avatar, Button, Modal } from './ui';
+import { MiniHand } from './GamePanels';
 import { CardView } from './CardView';
 import { GameTable } from './GameTable';
 import { ChatDrawer } from './GamePanels';
@@ -122,10 +123,13 @@ function ContractPicker({ state, onPick }: { state: RoomState; onPick: (c: TrixC
   const tx = state.trix!;
   return (
     <Modal open onClose={() => {}} title="👑 اختيار التسمية">
-      <p className="mb-3 text-xs leading-relaxed text-ink-300">
+      <p className="mb-2 text-xs leading-relaxed text-ink-300">
         أنت صاحب المملكة {tx.kingdom}/{tx.kingdoms} — اختر التسمية التي تريد لعبها الآن.
         الأقل ضرراً على يدك هو الأفضل، وبقيت لك {tx.legalContracts.length} تسميات.
       </p>
+      <div className="mb-3">
+        <MiniHand cards={state.myHand} label="أوراقك — شاهدها قبل اختيار التسمية" />
+      </div>
       <div className="grid gap-2">
         {TRIX_CONTRACTS.map((c) => {
           const used = tx.used.includes(c);
@@ -169,6 +173,9 @@ function RevealPanel({ state, actions }: { state: RoomState; actions: RoomAction
           ? 'إن كنت تحمل K♥ يمكنك كشفه (تدبيله): من يأخذه يخسر 150 بدلاً من 75، وأنت تكسب 75 إن أخذه غيرك.'
           : 'إن كنت تحمل أي بنت (Q) يمكنك كشفها: من يأخذها يخسر 50 بدلاً من 25، وأنت تكسب 25 إن أخذها غيرك.'}
       </p>
+      <div className="mb-3">
+        <MiniHand cards={state.myHand} label="أوراقك" />
+      </div>
       {revealed.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1">
           {revealed.map((card) => (

@@ -1,10 +1,35 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import type { RoomState, RoundSummary as RoundSummaryData } from '../game/types';
-import { SUIT_SYMBOL, type Suit } from '../game/types';
-import { cn } from '../lib/utils';
+import { SUIT_SYMBOL, parseCard, type Suit } from '../game/types';
+import { cn, sortHand } from '../lib/utils';
 import { Button, Modal } from './ui';
+import { CardView } from './CardView';
 import { useStore } from '../lib/store';
+
+/* ======================= يد اللاعب المصغّرة ======================= */
+/**
+ * تعرض أوراق اللاعب داخل لوحات القرار (المزايدة/اختيار الطرنيب/اختيار التسمية)
+ * حتى يرى أوراقه كاملة قبل أن يطلب أو يمرّر أو يختار.
+ */
+export function MiniHand({ cards, size = 'sm', label }: { cards: string[]; size?: 'xs' | 'sm' | 'md'; label?: string }) {
+  const codes = useMemo(() => sortHand(cards.map(parseCard)).map((c) => c.code), [cards]);
+  return (
+    <div className="rounded-2xl bg-black/30 p-1.5">
+      <div className="mb-1 flex items-center justify-between px-1 text-[10px] text-ink-300">
+        <span>{label ?? 'أوراقك — رتّبها قبل القرار'}</span>
+        <span>{cards.length} ورقة</span>
+      </div>
+      <div className="no-scrollbar flex items-end overflow-x-auto pb-0.5" dir="rtl">
+        {codes.map((c, i) => (
+          <div key={c} className={cn('shrink-0', i > 0 && '-mr-2.5')}>
+            <CardView code={c} size={size} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* ============================ شريط النقاط ============================ */
 export function ScoreBar({ state }: { state: RoomState }) {
@@ -71,8 +96,11 @@ export function BidPanel({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 120, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-          className="glass absolute inset-x-2 bottom-2 z-40 rounded-3xl p-3 shadow-panel"
+          className="glass absolute inset-x-2 bottom-2 z-40 max-h-[74vh] overflow-y-auto rounded-3xl p-2.5 shadow-panel"
         >
+          <div className="mb-2">
+            <MiniHand cards={state.myHand} size="xs" label="أوراقك — شاهدها قبل القرار" />
+          </div>
           {mustChooseTrump ? (
             <>
               <div className="mb-2 text-center text-sm font-bold text-gold-300">فزت بالمزاد! اختر لون الطرنيب</div>
