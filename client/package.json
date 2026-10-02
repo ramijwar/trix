@@ -1,0 +1,47 @@
+{
+  "name": "tarneeb-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "واجهة لعبة الطرنيب - React + TypeScript + Vite + Tailwind",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:android": "tsc -b && vite build --mode android",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false --pretty",
+    "cap:sync": "cap sync android",
+    "cap:add-android": "cap add android",
+    "cap:open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/network": "^8.0.0",
+    "@capacitor/preferences": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
+    "@capacitor/toast": "^8.0.0",
+    "framer-motion": "^12.23.12",
+    "lucide-react": "^0.544.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "@fontsource/cairo": "^5.2.6",
+    "@fontsource/tajawal": "^5.2.6",
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  }
+}

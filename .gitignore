@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+client/node_modules/
+
+# build output
+client/dist/
+client/dist-android/
+dist/
+build/
+*.tsbuildinfo
+
+# android native build outputs (keep the project, ignore its build artefacts)
+client/android/.gradle/
+client/android/build/
+client/android/app/build/
+client/android/local.properties
+client/android/.idea/
+client/android/app/src/main/assets/public/
+client/android/app/src/main/assets/capacitor.config.json
+client/android/app/src/main/assets/capacitor.plugins.json
+client/android/app/src/main/res/xml/config.xml
+
+# runtime data (never commit the live database)
+server/data/*.sqlite
+server/data/*.sqlite-*
+server/data/*.db
+server/data/*.log
+server/data/backups/
+!server/data/.gitkeep
+
+# build tooling caches
+.tools/
+.tmp/
+*.zip.tmp
+
+# env
+.env
+.env.local
+*.local
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

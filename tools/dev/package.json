@@ -1,0 +1,16 @@
+{
+  "name": "trix-dev-tools",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "أدوات تطوير محلية: تشغيل خادم PHP الأصلي داخل WebAssembly (بدون تثبيت PHP) + اختبار API + فحص الأكواد",
+  "scripts": {
+    "start": "node php-server.mjs",
+    "lint": "node lint-php.mjs"
+  },
+  "dependencies": {
+    "php-wasm": "^0.2.0",
+    "php-wasm-mbstring": "^0.2.0",
+    "php-wasm-sqlite": "^0.2.0"
+  }
+}

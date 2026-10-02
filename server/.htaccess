@@ -1,0 +1,88 @@
+# =====================================================================
+#  طرنيب أونلاين — إعدادات Apache للاستضافة المشتركة (cPanel)
+#  ضع هذا الملف في نفس مجلد index.php
+# =====================================================================
+
+# ---------- حماية الملفات الحساسة ----------
+<FilesMatch "\.(sqlite|sqlite-wal|sqlite-shm|db|log|md|json|lock|bak|old|ini)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<Files "config.php">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</Files>
+
+<Files "config.sample.php">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</Files>
+
+# ---------- منع تصفح المجلدات الداخلية ----------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # منع الوصول المباشر إلى مجلدات الشيفرة والبيانات
+  RewriteRule ^(src|data|tools|docs)(/|$) - [F,L]
+
+  # روابط جميلة اختيارية: /api/room/poll  →  index.php?r=room/poll
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^api/(.*)$ index.php?r=$1 [QSA,L]
+</IfModule>
+
+# ---------- تحسينات عامة ----------
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "no-referrer"
+</IfModule>
+
+# الصفحة الرئيسية هي واجهة اللعبة، والـ API يُستدعى صريحاً عبر index.php?r=...
+DirectoryIndex index.html index.php
+
+# عدم إظهار محتوى المجلدات
+Options -Indexes
+
+# أنواع الملفات الحديثة
+<IfModule mod_mime.c>
+  AddType font/woff2 .woff2
+  AddType font/woff .woff
+  AddType image/webp .webp
+  AddType audio/mpeg .mp3
+</IfModule>
+
+# تخزين مؤقت طويل للأصول الثابتة (تحمل بصمة في الاسم)
+<IfModule mod_expires.c>
+  ExpiresByType text/css "access plus 30 days"
+  ExpiresByType application/javascript "access plus 30 days"
+  ExpiresByType font/woff2 "access plus 30 days"
+  ExpiresByType font/woff "access plus 30 days"
+  ExpiresByType image/png "access plus 30 days"
+  ExpiresByType audio/mpeg "access plus 30 days"
+</IfModule>
+
+# ضغط الاستجابات
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE application/json text/plain text/html
+</IfModule>
+
+# تعطيل التخزين المؤقت لملفات الـ API
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType application/json "access plus 0 seconds"
+</IfModule>
