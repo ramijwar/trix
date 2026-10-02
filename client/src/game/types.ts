@@ -102,6 +102,13 @@ export interface TrixSummary {
   trickCounts: number[];
   revealed: Record<string, number>;
   finished: number[];
+  /** سبب نهاية التسمية: استنفاد الأوراق المعاقِبة أم انتهاء الأوراق */
+  endReason?: 'penalties' | 'cards';
+  /** عدد الأوراق التي لم تُلعب (عند النهاية المبكرة) */
+  remaining?: number;
+  /** كم ورقة معاقِبة أُكلت: كبة/بنات/ديناري */
+  penaltyCounts?: { kbeh: number; queen: number; diamond: number };
+
 }
 
 export interface BidInfo {

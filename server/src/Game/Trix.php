@@ -422,6 +422,48 @@ final class Trix
         }
     }
 
+    /**
+     * التسمية تنتهي فور استنفاد الأوراق المعاقِبة، تماماً كما في التركس المعروفة:
+     *   - ختيار الكبة: بمجرد أكل K♥ تنتهي التسمية.
+     *   - البنات: عند أكل كل البنات الأربع تنتهي التسمية.
+     *   - الديناري: عند أكل كل الديناري (١٣ ورقة) تنتهي التسمية.
+     * باقي التسميات (اللطوش والتركس) تُكمل كل الأوراق.
+     */
+    private static function penaltyExhausted(array $s): bool
+    {
+        $contract = (string) ($s['contract'] ?? '');
+        if ($contract === 'kbeh') {
+            foreach ((array) ($s['taken'] ?? []) as $list) {
+                if (in_array('kbeh', (array) $list, true)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if ($contract === 'queens') {
+            return self::countTaken($s, 'queen') >= 4;
+        }
+        if ($contract === 'diamonds') {
+            return self::countTaken($s, 'diamond') >= 13;
+        }
+        return false;
+    }
+
+    /** كم ورقة معاقِبة من نوع معيّن أُكلت حتى الآن */
+    // (تُستخدم أعلاه في countTaken)
+    private static function countTaken(array $s, string $kind): int
+    {
+        $n = 0;
+        foreach ((array) ($s['taken'] ?? []) as $list) {
+            foreach ((array) $list as $t) {
+                if ((string) $t === $kind) {
+                    $n++;
+                }
+            }
+        }
+        return $n;
+    }
+
     /* ============================ حسم الأكلة ============================ */
 
     public static function resolveTrick(array &$s): void
@@ -504,6 +546,12 @@ final class Trix
             self::endDeal($s);
             return;
         }
+        // استُنفدت الأوراق المعاقِبة (الكبة/كل البنات/كل الديناري) → تنتهي التسمية فوراً
+        if (self::penaltyExhausted($s)) {
+            self::log($s, 'penalty_exhausted', ['contract' => $contract]);
+            self::endDeal($s);
+            return;
+        }
         $s['phase'] = 'playing';
         self::skipStuckPlayers($s);
     }
@@ -533,12 +581,24 @@ final class Trix
         $dealNo = (int) $s['dealNo'];
         $kingdom = (int) $s['kingdom'];
         $king = (int) $s['king'];
+        $remaining = 0;
+        foreach ((array) $s['hands'] as $h) {
+            $remaining += count((array) $h);
+        }
+        $exhausted = self::penaltyExhausted($s);
         $s['summary'] = [
             'dealNo' => $dealNo,
             'kingdom' => $kingdom,
             'king' => $king,
             'contract' => $contract,
             'contractAr' => self::CONTRACT_AR[$contract] ?? $contract,
+            'endReason' => $exhausted ? 'penalties' : 'cards',
+            'remaining' => $remaining,
+            'penaltyCounts' => [
+                'kbeh' => self::countTaken($s, 'kbeh'),
+                'queen' => self::countTaken($s, 'queen'),
+                'diamond' => self::countTaken($s, 'diamond'),
+            ],
             'roundScores' => array_map('intval', (array) $s['roundScores']),
             'scores' => array_map('intval', (array) $s['scores']),
             'trickCounts' => array_map('intval', (array) $s['trickCounts']),

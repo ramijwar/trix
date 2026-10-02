@@ -229,6 +229,20 @@ function DealSummary({ state, actions }: { state: RoomState; actions: RoomAction
       <div className="mt-2 text-center text-xs text-ink-300">
         المملكة {sum.kingdom}/{tx.kingdoms} — بقيت {tx.legalContracts.length} تسميات في هذه المملكة
       </div>
+      {sum.endReason === 'penalties' && (
+        <div className="mt-2 rounded-xl bg-amber-500/15 px-2 py-1.5 text-center text-[11px] font-bold text-amber-300">
+          ⏹️ انتهت التسمية بمجرد أكل{' '}
+          {sum.contract === 'kbeh' ? 'شيخ الكبة' : sum.contract === 'queens' ? 'البنات الأربع' : 'الديناري كاملاً'}
+          {typeof sum.remaining === 'number' && sum.remaining > 0 ? ` — بقيت ${sum.remaining} ورقة بلا لعب` : ''}
+        </div>
+      )}
+      {sum.penaltyCounts && (sum.contract === 'kbeh' || sum.contract === 'queens' || sum.contract === 'diamonds') && (
+        <div className="mt-1 text-center text-[11px] text-ink-300">
+          {sum.contract === 'kbeh' && `أُكل شيخ الكبة ${sum.penaltyCounts.kbeh}/1 👑`}
+          {sum.contract === 'queens' && `أُكلت البنات ${sum.penaltyCounts.queen}/4 👸`}
+          {sum.contract === 'diamonds' && `أُكل الديناري ${sum.penaltyCounts.diamond}/13 💎`}
+        </div>
+      )}
       <Button variant="gold" full className="mt-3" onClick={() => actions.continueRound()}>
         التسمية التالية ▶
       </Button>
