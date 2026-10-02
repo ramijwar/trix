@@ -90,7 +90,7 @@ export function Modal({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -212,7 +212,7 @@ export function XpBar({ into, need }: { into: number; need: number }) {
         className="h-full rounded-full bg-gradient-to-r from-gold-300 to-gold-600"
         initial={{ width: 0 }}
         animate={{ width: `${pct}%` }}
-        transition={{ duration: 0.7, ease: 'easeOut' }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
       />
     </div>
   );
@@ -241,7 +241,7 @@ export function EmptyState({ icon, title, hint }: { icon: string; title: string;
 export function Confetti({ show }: { show: boolean }) {
   if (!show) return null;
   const colors = ['#d4af37', '#38bdf8', '#fb923c', '#22c55e', '#f5e3a3', '#ef4444'];
-  const pieces = Array.from({ length: 60 }, (_, i) => i);
+  const pieces = Array.from({ length: 34 }, (_, i) => i);
   return (
     <>
       {pieces.map((i) => (
@@ -251,7 +251,7 @@ export function Confetti({ show }: { show: boolean }) {
           style={{
             left: `${Math.random() * 100}%`,
             background: colors[i % colors.length],
-            animationDuration: `${2.2 + Math.random() * 1.8}s`,
+            animationDuration: `${1.5 + Math.random() * 1.3}s`,
             animationDelay: `${Math.random() * 0.6}s`,
           }}
         />

@@ -32,7 +32,7 @@ function Piles({ state, nameOf }: { state: RoomState; nameOf: (seat: number) => 
   const piles = state.trix?.piles ?? {};
   const lastPlay = state.trix?.lastPlay ?? null;
   return (
-    <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-black/45 p-2 backdrop-blur">
+    <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-black/55 p-2">
       {SUITS.map((suit) => {
         const pile = piles[suit];
         const cards: number[] = [];
@@ -402,7 +402,7 @@ export function TrixView({
       {tx.revealPhase && !tx.mustChooseContract && <RevealPanel state={state} actions={actions} />}
 
       {/* انتظار اختيار الملك */}
-      {!tx.mustChooseContract && state.phase === 'choosing' && (
+      {!tx.mustChooseContract && !tx.contract && state.phase === 'choosing' && (
         <div className="mx-2 mb-2 rounded-2xl bg-black/40 py-2 text-center text-xs text-ink-200">
           👑 {nameOf(tx.kingSeat)} يختار التسمية… ({tx.used.length}/5 لُعبت في هذه المملكة)
         </div>

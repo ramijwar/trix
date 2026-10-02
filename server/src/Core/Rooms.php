@@ -225,6 +225,17 @@ final class Rooms
         return $state;
     }
 
+    /**
+     * بصمة مختصرة للحالة تتجاهل الطوابع الزمنية للحضور فقط،
+     * لنعرف إن كان هناك تغيير حقيقي يستحق كتابة في القاعدة أو زيادة رقم النسخة.
+     */
+    private static function signature(string $json): string
+    {
+        $json = (string) preg_replace('/"lastSeen":\d+(\.\d+)?/', '"lastSeen":0', $json);
+        $json = (string) preg_replace('/"lastActivity":\d+/', '"lastActivity":0', $json);
+        return md5($json);
+    }
+
     /* ======================= تعديل الحالة بقفل ======================= */
 
     /**
@@ -258,6 +269,15 @@ final class Rooms
             if (($state['phase'] ?? 'waiting') === 'game_end' && $status !== 'finished') {
                 $status = 'finished';
             }
+            /*
+             * زيادة رقم النسخة عند أي تغيير حقيقي في اللعب:
+             * الاستعلام الطويل يعود فوراً للاعبين عند اختلاف الرقم،
+             * وبذلك تظهر الحركات بدون انتظار (كانت لعبة التركس تنتظر انتهاء المهلة!).
+             */
+            $afterJson = json_encode($state, JSON_UNESCAPED_UNICODE);
+            if (self::signature($afterJson) !== self::signature((string) ($room['state'] ?? ''))) {
+                $state['version'] = (int) ($state['version'] ?? 1) + 1;
+            }
             self::persist($room, $state, $status);
             return is_array($result) ? array_merge($result, ['_state' => $state, '_room' => $room]) : ['_state' => $state, '_room' => $room];
         } finally {
@@ -270,6 +290,13 @@ final class Rooms
     {
         $state = self::stampSeats($state);
         $state['lastActivity'] = time();
+        // لا حاجة لكتابة صف الغرفة إن لم يتغير شيء فعلي (عدا طوابع الحضور)
+        $status = $status ?? (string) $room['status'];
+        $encoded = json_encode($state, JSON_UNESCAPED_UNICODE);
+        if ($status === (string) $room['status']
+            && self::signature($encoded) === self::signature((string) ($room['state'] ?? ''))) {
+            return;
+        }
         $seats = [];
         for ($i = 0; $i < 4; $i++) {
             $pl = $state['seats'][$i] ?? null;
@@ -396,8 +423,13 @@ final class Rooms
             "SELECT * FROM rooms WHERE status IN ('waiting') AND is_private = 0 AND password = '' AND last_activity > ? ORDER BY last_activity DESC LIMIT 30",
             [time() - 1800]
         );
+        $wantGame = (string) ($settings['game'] ?? 'tarnib');
         foreach ($rows as $row) {
             $state = self::decode($row);
+            // لا تدخل غرفة من نوع لعبة مختلف (كان «تركس سريع» قد يدخل غرفة طرنيب)
+            if ((string) ($state['settings']['game'] ?? 'tarnib') !== $wantGame) {
+                continue;
+            }
             if (self::seatOf($state, (int) $user['id']) !== null) {
                 return self::requireRoom((string) $row['id']);
             }
@@ -848,14 +880,14 @@ final class Rooms
 
         // حسم الأكلة بعد حركة العرض
         if ($phase === 'resolving') {
-            if ($now - (float) $state['turnStartedAt'] >= 1.1) {
+            if ($now - (float) $state['turnStartedAt'] >= 0.45) {
                 Engine::resolveTrick($state);
             }
             return;
         }
 
         if ($phase === 'round_end') {
-            if ($now - (float) $state['turnStartedAt'] >= 7.0 && empty($state['paused'])) {
+            if ($now - (float) $state['turnStartedAt'] >= 3.0 && empty($state['paused'])) {
                 $state['continue'] = [];
                 Engine::nextRound($state);
             }
@@ -881,7 +913,7 @@ final class Rooms
 
         // دور بوت (زمن تفكير البوت قابل للضبط من config.php)
         if ($player !== null && !empty($player['isBot'])) {
-            if ($elapsed >= (float) Config::get('bot_delay', 1.2)) {
+            if ($elapsed >= (float) Config::get('bot_delay', 0.35)) {
                 if (!Engine::botAct($state)) {
                     // احتياط: تجاوز الدور
                     Engine::autoAct($state, 1);
@@ -1176,7 +1208,7 @@ final class Rooms
             if (!empty($result['changed'])) {
                 break;
             }
-            usleep(400000); // 0.4 ثانية
+            usleep(180000); // 0.18 ثانية — استجابة أسرع للحركات
         } while (microtime(true) < $deadline);
 
         $fresh = self::requireRoom($roomId);

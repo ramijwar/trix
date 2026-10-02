@@ -5,7 +5,8 @@
  * - تحديثات متفائلة للواجهة (تظهر ورقتك فوراً قبل تأكيد الخادم)
  */
 import { api, ApiError } from './api';
-import type { RoomState, WireChat } from '../game/types';
+import { TRIX_CONTRACT_AR, TRIX_CONTRACT_ICON } from '../game/types';
+import type { RoomState, TrixContract, WireChat } from '../game/types';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'offline';
 
@@ -110,14 +111,32 @@ export class RoomSession {
 
   /* ============================ الإجراءات ============================ */
 
-  /** اختيار تسمية في التركس (صاحب المملكة) */
+  /** اختيار تسمية في التركس (صاحب المملكة) — يظهر فوراً بلا انتظار */
   chooseContract(contract: string): Promise<void> {
-    return this.act('game/contract', { contract });
+    return this.act('game/contract', { contract }, (s) => {
+      const tx = s.trix;
+      if (!tx || !tx.mustChooseContract) return;
+      tx.contract = contract as TrixContract;
+      tx.contractAr = TRIX_CONTRACT_AR[contract as TrixContract] ?? null;
+      tx.contractIcon = TRIX_CONTRACT_ICON[contract as TrixContract] ?? null;
+      tx.mustChooseContract = false;
+      tx.legalContracts = [];
+      tx.used = [...tx.used, contract as TrixContract];
+      s.isMyTurn = false;
+    });
   }
 
   /** كشف/تدبيل ورقة معاقِبة أو تأكيد الجاهزية لبدء اللعب */
   reveal(card?: string, done = false): Promise<void> {
-    return this.act('game/reveal', { card: card ?? '', done: done || !card });
+    return this.act('game/reveal', { card: card ?? '', done: done || !card }, (s) => {
+      const tx = s.trix;
+      if (!tx) return;
+      if (card) {
+        tx.revealed = { ...tx.revealed, [card]: s.mySeat };
+        tx.canReveal = tx.canReveal.filter((c) => c !== card);
+      }
+      if (done || !card) tx.revealReady = true;
+    });
   }
 
 

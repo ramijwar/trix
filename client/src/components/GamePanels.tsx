@@ -36,7 +36,7 @@ export function ScoreBar({ state }: { state: RoomState }) {
                 </motion.span>
               </div>
               <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                <motion.div className="h-full rounded-full" style={{ background: t.color }} animate={{ width: `${t.pct}%` }} transition={{ duration: 0.6 }} />
+                <motion.div className="h-full rounded-full" style={{ background: t.color }} animate={{ width: `${t.pct}%` }} transition={{ duration: 0.28 }} />
               </div>
             </div>
           ))}
@@ -142,10 +142,10 @@ export function RoundSummary({ state, onContinue }: { state: RoomState; onContin
   // ملخص الجولة خاص بالطرنيب — التركس له ملخصه داخل TrixView
   const s = state.lastRoundSummary as RoundSummaryData | null;
   const show = state.phase === 'round_end' && Boolean(s);
-  const [left, setLeft] = useState(7);
+  const [left, setLeft] = useState(3);
   useEffect(() => {
     if (!show) return;
-    setLeft(7);
+    setLeft(3);
     const id = setInterval(() => setLeft((v) => Math.max(0, v - 1)), 1000);
     return () => clearInterval(id);
   }, [show, s?.round]);

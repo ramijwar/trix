@@ -49,9 +49,9 @@ final class Trix
     public const TRIX_BONUS = [200, 150, 100, 50];
 
     /** مهلة الكشف (التدبيل) بالثواني */
-    private const REVEAL_SECONDS = 8.0;
+    private const REVEAL_SECONDS = 5.0;
     /** مهلة عرض ملخص التسمية قبل الانتقال للتالية */
-    private const SUMMARY_SECONDS = 8.0;
+    private const SUMMARY_SECONDS = 3.0;
 
     public static function now(): float
     {
@@ -191,7 +191,16 @@ final class Trix
         self::log($s, 'contract', ['seat' => $seat, 'contract' => $contract]);
 
         $allowDouble = !empty($s['settings']['allowDouble']);
-        if ($allowDouble && in_array($contract, ['kbeh', 'queens'], true)) {
+        $anyRevealable = false;
+        if ($allowDouble) {
+            for ($i = 0; $i < 4; $i++) {
+                if (count(self::revealable($s, $i)) > 0) {
+                    $anyRevealable = true;
+                    break;
+                }
+            }
+        }
+        if ($allowDouble && $anyRevealable && in_array($contract, ['kbeh', 'queens'], true)) {
             $s['phase'] = 'reveal';
         } else {
             self::beginPlay($s);
@@ -624,7 +633,7 @@ final class Trix
         $elapsed = $now - (float) ($s['turnStartedAt'] ?? $now);
 
         if ($phase === 'resolving') {
-            if ($elapsed >= 1.1) {
+            if ($elapsed >= 0.45) {
                 self::resolveTrick($s);
             }
             return;
@@ -636,14 +645,28 @@ final class Trix
                 self::beginPlay($s);
                 return;
             }
-            // كل بوت يقرر التدبيل عن نفسه ثم يؤكد الجاهزية
             $players = (array) ($s['seats'] ?? []);
             $ready = (array) ($s['revealReady'] ?? []);
+            // من لا يملك ورقة قابلة للتدبيل لا داعي لانتظاره
+            foreach ($players as $i => $pl) {
+                if ($pl === null || in_array((int) $i, $ready, true)) {
+                    continue;
+                }
+                if (count(self::revealable($s, (int) $i)) === 0) {
+                    $ready[] = (int) $i;
+                }
+            }
+            $s['revealReady'] = $ready;
+            if (self::allHumansReady($s, $ready)) {
+                self::beginPlay($s);
+                return;
+            }
+            // كل بوت يقرر التدبيل عن نفسه ثم يؤكد الجاهزية
             foreach ($players as $i => $pl) {
                 if ($pl === null || empty($pl['isBot']) || in_array((int) $i, $ready, true)) {
                     continue;
                 }
-                if ($elapsed >= (float) Config::get('bot_delay', 1.2)) {
+                if ($elapsed >= (float) Config::get('bot_delay', 0.35)) {
                     self::botReveal($s, (int) $i);
                     return;
                 }
@@ -669,7 +692,7 @@ final class Trix
         $seat = (int) $s['turn'];
         $player = (array) ($s['seats'][$seat] ?? []);
         if ($player !== null && !empty($player['isBot'])) {
-            if ($elapsed >= (float) Config::get('bot_delay', 1.2)) {
+            if ($elapsed >= (float) Config::get('bot_delay', 0.35)) {
                 if (!self::botAct($s)) {
                     self::autoAct($s);
                 }

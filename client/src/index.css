@@ -72,7 +72,7 @@ body {
 /* ===================== أدوات مساعدة ===================== */
 @utility glass {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
@@ -111,7 +111,7 @@ body {
   }
 }
 .anim-float-in {
-  animation: floatIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: floatIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes cardDeal {
@@ -125,7 +125,7 @@ body {
   }
 }
 .anim-deal {
-  animation: cardDeal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: cardDeal 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes popIn {
@@ -142,7 +142,7 @@ body {
   }
 }
 .anim-pop {
-  animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 @keyframes pulseRing {

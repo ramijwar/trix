@@ -17,7 +17,7 @@ export function BottomNav() {
   const inRoom = view === 'room';
   if (inRoom) return null;
   return (
-    <nav className="safe-bottom mx-2 mb-1 grid grid-cols-4 gap-1 rounded-3xl border border-white/10 bg-black/45 p-1.5 backdrop-blur">
+    <nav className="safe-bottom mx-2 mb-1 grid grid-cols-4 gap-1 rounded-3xl border border-white/10 bg-black/55 p-1.5">
       {ITEMS.map((it) => {
         const active = view === it.view;
         return (

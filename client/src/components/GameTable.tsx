@@ -104,7 +104,7 @@ function Seat({ player, rel, isTurn, isDealer, handCount, bid, passed, bestBid, 
         {player?.isBot && <span className="absolute -bottom-1 -left-2 rounded-full bg-slate-700 px-1.5 text-[9px] font-bold">بوت</span>}
       </div>
 
-      <div className="w-full rounded-xl bg-black/40 px-2 py-0.5 text-center backdrop-blur">
+      <div className="w-full rounded-xl bg-black/55 px-2 py-0.5 text-center">
         <div className="truncate text-[11px] font-bold" style={{ color: teamColor }}>
           {player?.name ?? 'مقعد فارغ'}
         </div>
@@ -203,10 +203,10 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
               <motion.div
                 key={tc.card + '-' + tc.seat}
                 className={cn('absolute', TRICK_POS[relOf(tc.seat)])}
-                initial={{ scale: 0.5, opacity: 0, y: 26 }}
+                initial={{ scale: 0.7, opacity: 0, y: 14 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.6, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                transition={{ duration: 0.14, ease: 'easeOut' }}
               >
                 <CardView code={tc.card} size="md" />
               </motion.div>
@@ -259,10 +259,9 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children, badge,
             return (
               <motion.div
                 key={c}
-                layout
-                initial={{ y: 24, opacity: 0 }}
+                initial={{ y: 14, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: Math.min(i * 0.02, 0.25), type: 'spring', stiffness: 380, damping: 30 }}
+                transition={{ delay: Math.min(i * 0.006, 0.06), duration: 0.16, ease: 'easeOut' }}
                 className={cn('shrink-0', i > 0 && '-mr-3')}
               >
                 <CardView
