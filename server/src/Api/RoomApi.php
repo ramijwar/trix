@@ -7,6 +7,7 @@ use Trix\Core\Auth;
 use Trix\Core\Http;
 use Trix\Core\Rooms;
 use Trix\Game\Engine;
+use Trix\Game\Trix;
 
 /** مسارات الغرف واللعب */
 final class RoomApi
@@ -236,6 +237,48 @@ final class RoomApi
         Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
     }
 
+/** اختيار تسمية في لعبة التركس (صاحب المملكة فقط) */
+    public static function contract(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $contract = Http::str('contract');
+        $userId = (int) $user['id'];
+        $result = Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $contract) {
+            $seat = Rooms::seatOf($state, $userId);
+            if ($seat === null) {
+                Http::fail('أنت لست في هذه الطاولة', 403);
+            }
+            Trix::chooseContract($state, $seat, $contract);
+            return [];
+        });
+        Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
+    }
+
+    /** تدبيل ورقة معاقِبة قبل بدء اللعب، أو تأكيد الجاهزية */
+    public static function reveal(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $card = Http::str('card');
+        $done = Http::bool('done');
+        $userId = (int) $user['id'];
+        $result = Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $card, $done) {
+            $seat = Rooms::seatOf($state, $userId);
+            if ($seat === null) {
+                Http::fail('أنت لست في هذه الطاولة', 403);
+            }
+            if ($card !== '') {
+                Trix::reveal($state, $seat, $card);
+            }
+            if ($done || $card === '') {
+                Trix::revealDone($state, $seat);
+            }
+            return [];
+        });
+        Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
+    }
+
     public static function play(): void
     {
         $user = Auth::requireUser();
@@ -247,7 +290,11 @@ final class RoomApi
             if ($seat === null) {
                 Http::fail('أنت لست في هذه الطاولة', 403);
             }
-            Engine::applyPlay($state, $seat, $card);
+            if (((($state['settings']['game'] ?? 'tarnib')) === 'trix')) {
+                Trix::applyPlay($state, $seat, $card);
+            } else {
+                Engine::applyPlay($state, $seat, $card);
+            }
             return [];
         });
         Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);

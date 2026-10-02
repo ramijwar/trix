@@ -34,7 +34,75 @@ export interface SeatPlayer {
   lastSeen?: number;
 }
 
-export type Phase = 'waiting' | 'bidding' | 'playing' | 'round_end' | 'game_end';
+export type Phase = 'waiting' | 'bidding' | 'choosing' | 'reveal' | 'playing' | 'round_end' | 'game_end';
+
+/** تسميات لعبة التركس الخمس */
+export type TrixContract = 'kbeh' | 'queens' | 'diamonds' | 'tricks' | 'trix';
+
+export const TRIX_CONTRACTS: TrixContract[] = ['kbeh', 'queens', 'diamonds', 'tricks', 'trix'];
+
+export const TRIX_CONTRACT_AR: Record<TrixContract, string> = {
+  kbeh: 'ختيار الكبة',
+  queens: 'البنات',
+  diamonds: 'الديناري',
+  tricks: 'اللطوش',
+  trix: 'التركس',
+};
+
+export const TRIX_CONTRACT_ICON: Record<TrixContract, string> = {
+  kbeh: '👑',
+  queens: '👸',
+  diamonds: '💎',
+  tricks: '🎴',
+  trix: '🧩',
+};
+
+export const TRIX_CONTRACT_HINT: Record<TrixContract, string> = {
+  kbeh: 'تجنّب أخذ K♥ — من يأخذها يخسر 75 نقطة (150 إن كانت مدبّلة)',
+  queens: 'كل بنت (Q) تأخذها تخصم 25 نقطة (50 إن كانت مدبّلة)',
+  diamonds: 'كل ورقة ديناري تأخذها تخصم 10 نقاط (المجموع 130)',
+  tricks: 'كل أكلة تأخذها تخصم 15 نقطة (المجموع 195)',
+  trix: 'اللعبة الموجبة: رتّب أوراقك على مجموعات تبدأ بالشاب — الأول 200 والثاني 150 والثالث 100 والرابع 50',
+};
+
+/** معلومات لعبة التركس داخل حالة الغرفة */
+export interface TrixInfo {
+  contract: TrixContract | null;
+  contractAr: string | null;
+  contractIcon: string | null;
+  used: TrixContract[];
+  legalContracts: TrixContract[];
+  mustChooseContract: boolean;
+  kingSeat: number;
+  kingdom: number;
+  kingdoms: number;
+  dealNo: number;
+  piles: Partial<Record<Suit, { low: number; high: number }>>;
+  trickCounts: number[];
+  roundScores: number[];
+  finished: number[];
+  revealed: Record<string, number>;
+  canReveal: string[];
+  revealReady: boolean;
+  revealPhase: boolean;
+  lastPlay: { seat: number; card: string } | null;
+  taken: string[];
+  winnerSeat: number | null;
+  isIndividual: boolean;
+}
+
+export interface TrixSummary {
+  dealNo: number;
+  kingdom: number;
+  king: number;
+  contract: TrixContract;
+  contractAr: string;
+  roundScores: number[];
+  scores: number[];
+  trickCounts: number[];
+  revealed: Record<string, number>;
+  finished: number[];
+}
 
 export interface BidInfo {
   /** أعلى طلب حالي (7..13) أو null إن لم يطلب أحد */
@@ -62,7 +130,13 @@ export interface PlayedTrick {
   winner: number | null;
 }
 
+export type GameKind = 'tarnib' | 'trix';
+
 export interface RoomSettings {
+  /** نوع اللعبة: طرنيب (شراكة) أو تركس (فردية) */
+  game: GameKind;
+  /** عدد الممالك في التركس: 1 (سريعة) أو 2 أو 4 (كاملة) */
+  kingdoms: 1 | 2 | 4;
   /** النقاط المطلوبة للفوز */
   target: 31 | 41 | 61;
   /** السماح بالمضاعفة (دبل) من الفريق الخصم */
@@ -82,6 +156,8 @@ export interface RoomSettings {
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
+  game: 'tarnib',
+  kingdoms: 4,
   target: 31,
   allowDouble: false,
   allowNoTrump: false,
@@ -125,7 +201,8 @@ export interface PublicState {
   tricksWon: [number, number];
   bid: BidInfo;
   trump: TrumpSuit | null;
-  scores: [number, number];
+  /** نقاط الفريقين في الطرنيب — أو نقاط اللاعبين الأربعة في التركس */
+  scores: number[];
   round: number;
   roundBids: Record<number, number>; // مقعد -> طلب في هذه الجولة
   target: number;
@@ -144,7 +221,11 @@ export interface PublicState {
   canPass: boolean;
   canDouble: boolean;
   winnerTeam: Team | null;
-  lastRoundSummary: RoundSummary | null;
+  lastRoundSummary: RoundSummary | TrixSummary | null;
+  /** نوع اللعبة الجارية */
+  game?: GameKind;
+  /** تفاصيل لعبة التركس (تظهر عند game = trix) */
+  trix?: TrixInfo | null;
 }
 
 export interface RoundSummary {
@@ -382,7 +463,8 @@ export interface TableState {
   tricksWon: [number, number];
   bid: BidInfo;
   trump: TrumpSuit | null;
-  scores: [number, number];
+  /** نقاط الفريقين في الطرنيب — أو نقاط اللاعبين الأربعة في التركس */
+  scores: number[];
   round: number;
   roundBids: Record<string, number>;
   /** الوقت المتبقي للدور بالمللي ثانية */
@@ -398,7 +480,11 @@ export interface TableState {
   mustChooseTrump?: boolean;
   wonTrick?: boolean;
   winnerTeam: Team | null;
-  lastRoundSummary: RoundSummary | null;
+  lastRoundSummary: RoundSummary | TrixSummary | null;
+  /** نوع اللعبة الجارية */
+  game?: GameKind;
+  /** تفاصيل لعبة التركس (تظهر عند game = trix) */
+  trix?: TrixInfo | null;
 }
 
 /** حالة الغرفة كما يرسلها الخادم */
@@ -424,6 +510,9 @@ export interface RoomListItem {
   players: number;
   humans: number;
   maxPlayers: number;
+  /** نوع اللعبة في هذه الطاولة */
+  game?: GameKind;
+  kingdoms?: number;
   target: number;
   round: number;
   scores: [number, number];

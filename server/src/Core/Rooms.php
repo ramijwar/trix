@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Trix\Core;
 
 use Trix\Game\Engine;
+use Trix\Game\Trix;
 
 /**
  * إدارة الغرف والطاولات: الإنشاء، الانضمام، اختيار الشركاء، المزامنة، والدوران
@@ -19,6 +20,8 @@ final class Rooms
     public static function defaultSettings(): array
     {
         return [
+            'game' => 'tarnib',
+            'kingdoms' => 4,
             'target' => 31,
             'allowDouble' => false,
             'allowNoTrump' => false,
@@ -33,9 +36,17 @@ final class Rooms
     public static function sanitizeSettings(array $in, array $base = []): array
     {
         $out = array_merge(self::defaultSettings(), $base);
+        if (isset($in['game'])) {
+            $g = strtolower(trim((string) $in['game']));
+            $out['game'] = in_array($g, ['tarnib', 'trix'], true) ? $g : 'tarnib';
+        }
         if (isset($in['target'])) {
             $t = (int) $in['target'];
             $out['target'] = in_array($t, [31, 41, 61], true) ? $t : 31;
+        }
+        if (isset($in['kingdoms'])) {
+            $k = (int) $in['kingdoms'];
+            $out['kingdoms'] = in_array($k, [1, 2, 4], true) ? $k : 4;
         }
         foreach (['allowDouble', 'allowNoTrump', 'requireTrumpInHand', 'quickPlay', 'sound'] as $k) {
             if (array_key_exists($k, $in)) {
@@ -663,12 +674,18 @@ final class Rooms
             }
             $settings = self::sanitizeSettings((array) ($state['settings'] ?? []));
             $dealer = random_int(0, 3);
-            $newState = Engine::newMatch($seats, $settings, $dealer, (string) $r['code'], (string) $r['name']);
+            $newState = ($settings['game'] ?? 'tarnib') === 'trix'
+                ? Trix::newMatch($seats, $settings, $dealer, (string) $r['code'], (string) $r['name'])
+                : Engine::newMatch($seats, $settings, $dealer, (string) $r['code'], (string) $r['name']);
             $newState['hostId'] = (int) $r['host_id'];
             $newState['swap'] = [];
             $newState['settings'] = $settings;
             $newState['recorded'] = false;
-            Engine::chat($newState, null, 'بدأت المباراة — الهدف ' . $settings['target'] . ' نقطة');
+            if (($settings['game'] ?? 'tarnib') === 'trix') {
+                Trix::chat($newState, null, 'بدأت مباراة التركس — ٤ ممالك × ٥ تسميات 🧩');
+            } else {
+                Engine::chat($newState, null, 'بدأت المباراة — الهدف ' . $settings['target'] . ' نقطة');
+            }
             foreach ($newState['seats'] as $i => $pl) {
                 if ($pl !== null) {
                     $newState['seats'][$i]['ready'] = true;
@@ -716,6 +733,40 @@ final class Rooms
                 Http::fail('أنت لست في هذه الطاولة', 403);
             }
             // نهاية المباراة: يبدأ صاحب الغرفة مباراة جديدة بنفس الطاولة
+            if (((($state['settings']['game'] ?? 'tarnib')) === 'trix')) {
+                if (($state['phase'] ?? '') === 'round_end') {
+                    Trix::continueDeal($state, (int) $seat);
+                    return [];
+                }
+                if (($state['phase'] ?? '') === 'game_end') {
+                    if ((int) $r['host_id'] !== (int) $user['id']) {
+                        Http::fail('فقط صاحب الغرفة يبدأ مباراة جديدة', 403, 'not_host');
+                    }
+                    $settings = self::sanitizeSettings((array) ($state['settings'] ?? []), self::settings($r));
+                    $newState = Trix::newMatch(
+                        (array) $state['seats'],
+                        $settings,
+                        random_int(0, 3),
+                        (string) $r['code'],
+                        (string) $r['name']
+                    );
+                    $newState['hostId'] = (int) $r['host_id'];
+                    $newState['swap'] = [];
+                    $newState['settings'] = $settings;
+                    $newState['recorded'] = false;
+                    foreach ($newState['seats'] as $i => $pl) {
+                        if ($pl !== null) {
+                            $newState['seats'][$i]['ready'] = true;
+                        }
+                    }
+                    foreach ($newState as $k => $v) {
+                        $state[$k] = $v;
+                    }
+                    $r['status'] = 'playing';
+                    return [];
+                }
+                return [];
+            }
             if (($state['phase'] ?? '') === 'game_end') {
                 if ((int) $r['host_id'] !== (int) $user['id']) {
                     Http::fail('فقط صاحب الغرفة يبدأ مباراة جديدة', 403, 'not_host');
@@ -778,6 +829,20 @@ final class Rooms
         $state['settings'] = $settings;
 
         if ($phase === 'waiting') {
+            return;
+        }
+
+        // لعبة التركس لها منطقها الخاص
+        if (($settings['game'] ?? 'tarnib') === 'trix') {
+            if ($phase === 'game_end') {
+                if (empty($state['recorded'])) {
+                    self::recordTrixMatch($room, $state);
+                    $state['recorded'] = true;
+                    $room['status'] = 'finished';
+                }
+                return;
+            }
+            Trix::tick($state);
             return;
         }
 
@@ -881,6 +946,39 @@ final class Rooms
         Engine::chat($state, null, $winner === 0 ? 'فاز الفريق الأول بالمباراة 🏆' : 'فاز الفريق الثاني بالمباراة 🏆');
     }
 
+    /** تسجيل نتيجة مباراة التركس (لعبة فردية — الفائز صاحب أعلى مجموع) */
+    private static function recordTrixMatch(array $room, array $state): void
+    {
+        $seats = (array) $state['seats'];
+        $scores = array_map('intval', (array) ($state['scores'] ?? [0, 0, 0, 0]));
+        $winner = (int) ($state['winner'] ?? 0);
+        $ids = [];
+        $names = [];
+        foreach ($seats as $pl) {
+            $ids[] = $pl === null ? 0 : (int) $pl['userId'];
+            $names[] = $pl === null ? '-' : (string) $pl['name'];
+        }
+        Db::insert('matches', [
+            'room_code' => (string) $room['code'],
+            'target' => 0,
+            'score_a' => (int) ($scores[0] ?? 0),
+            'score_b' => (int) ($scores[1] ?? 0),
+            'winner_team' => $winner,
+            'rounds' => max(1, (int) ($state['dealNo'] ?? 1) - 1),
+            'player_ids' => json_encode($ids),
+            'names' => json_encode($names, JSON_UNESCAPED_UNICODE),
+            'duration' => max(1, time() - (int) ($state['createdAt'] ?? time())),
+            'created_at' => time(),
+        ]);
+        foreach ($seats as $i => $pl) {
+            if ($pl === null || !empty($pl['isBot']) || (int) $pl['userId'] <= 0) {
+                continue;
+            }
+            Users::recordResult((int) $pl['userId'], (int) $i === $winner, false, max(1, (int) ($state['dealNo'] ?? 1) - 1));
+        }
+        Trix::chat($state, null, 'انتهت مباراة التركس 🏆');
+    }
+
     /* ============================ العرض ============================ */
 
     /** حالة الغرفة كما يراها لاعب معيّن */
@@ -892,7 +990,8 @@ final class Rooms
         if ($phase === 'waiting' || $seat === null) {
             $view = self::waitingView($room, $state, $userId, $seat);
         } else {
-            $view = Engine::publicView($state, $seat);
+            $isTrix = ((($state['settings']['game'] ?? 'tarnib')) === 'trix');
+            $view = $isTrix ? Trix::publicView($state, $seat) : Engine::publicView($state, $seat);
             $view['roomId'] = (string) $room['id'];
             $view['roomCode'] = (string) $room['code'];
             $view['roomName'] = (string) $room['name'];
@@ -1044,6 +1143,8 @@ final class Rooms
                 'players' => $players,
                 'humans' => $human,
                 'maxPlayers' => 4,
+                'game' => (string) (($state['settings']['game'] ?? self::settings($row)['game'] ?? 'tarnib')),
+                'kingdoms' => (int) (($state['settings']['kingdoms'] ?? 4)),
                 'target' => (int) (($state['settings']['target'] ?? self::settings($row)['target'])),
                 'round' => (int) ($state['round'] ?? 0),
                 'scores' => [(int) ($state['scores'][0] ?? 0), (int) ($state['scores'][1] ?? 0)],

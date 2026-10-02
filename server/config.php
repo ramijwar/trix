@@ -15,7 +15,7 @@ return [
     // مفتاح سري — غيّره إلى نص عشوائي طويل
     'secret' => 'change-this-secret-key',
 
-    'app_name' => 'طرنيب أونلاين',
+    'app_name' => 'طرنيب وتركس أونلاين',
 
     // اجعله true أثناء التطوير فقط
     'debug' => false,

@@ -15,7 +15,7 @@ return [
     'secret' => 'CHANGE_ME_TO_A_LONG_RANDOM_STRING',
 
     // اسم التطبيق
-    'app_name' => 'طرنيب أونلاين',
+    'app_name' => 'طرنيب وتركس أونلاين',
 
     // وضع التطوير: يعرض تفاصيل الأخطاء (أوقفه على الاستضافة)
     'debug' => false,

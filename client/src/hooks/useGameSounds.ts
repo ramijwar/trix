@@ -67,6 +67,27 @@ export function useGameSounds(state: RoomState | null, mySeat: number | null) {
         case 'redeal':
           sfx('shuffle');
           break;
+        // ===== أحداث لعبة التركس =====
+        case 'contract':
+          sfx('flip');
+          break;
+        case 'reveal':
+          sfx('gold');
+          break;
+        case 'pile_start':
+          sfx('cardPlace');
+          break;
+        case 'finished':
+          sfx('trickWin');
+          break;
+        case 'deal_end': {
+          const rs = (e.roundScores as number[] | undefined) ?? [];
+          const mine = mySeat === null ? 0 : rs[mySeat] ?? 0;
+          if (mine > 0) sfx('win');
+          else if (mine < 0) sfx('lose');
+          else sfx('trickWin');
+          break;
+        }
       }
     }
     if (fresh.length) lastEvent.current = Math.max(...fresh.map((e) => e.id));
@@ -80,7 +101,7 @@ export function useGameSounds(state: RoomState | null, mySeat: number | null) {
     }
 
     // تنبيه دوري
-    const myTurn = state.isMyTurn && (state.phase === 'bidding' || state.phase === 'playing');
+    const myTurn = state.isMyTurn && (state.phase === 'bidding' || state.phase === 'playing' || state.phase === 'choosing');
     if (myTurn && !wasMyTurn.current) {
       sfx('turn');
       void vibrate(30);

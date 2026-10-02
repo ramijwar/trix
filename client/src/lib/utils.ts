@@ -75,7 +75,7 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /** مشاركة نص: مشاركة النظام إن توفّرت، وإلا النسخ للحافظة */
-export async function shareText(text: string, title = 'طرنيب أونلاين'): Promise<boolean> {
+export async function shareText(text: string, title = 'طرنيب وتركس أونلاين'): Promise<boolean> {
   try {
     if (navigator.share) {
       await navigator.share({ text, title });

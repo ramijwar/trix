@@ -55,13 +55,41 @@ interface SeatProps {
   bestBid: number | null;
   cardBack: string;
   deadline: number | null;
+  badge?: React.ReactNode;
 }
 
-function Seat({ player, rel, isTurn, isDealer, handCount, bid, passed, bestBid, cardBack, deadline }: SeatProps) {
+/** صف أفقي من أوراق الظهر — يُستخدم لمقعد الشريك في الأعلى حتى لا تمتد الأوراق لوسط الطاولة */
+function CardRow({ count, back = 'red' }: { count: number; back?: string }) {
+  const shown = Math.min(count, 10);
+  return (
+    <div className="flex flex-col items-center">
+      <div className="flex flex-row items-center justify-center" dir="ltr">
+        {Array.from({ length: shown }, (_, i) => (
+          <div
+            key={i}
+            className={cn('playing-card card-back shrink-0', back, 'rounded-[4px]')}
+            style={{ width: 18, height: 26, marginLeft: i === 0 ? 0 : -9, transform: `rotate(${(i - (shown - 1) / 2) * 2.2}deg)` }}
+          />
+        ))}
+      </div>
+      <div className="text-[11px] font-bold text-ink-300">{count} ورقة</div>
+    </div>
+  );
+}
+
+function Seat({ player, rel, isTurn, isDealer, handCount, bid, passed, bestBid, cardBack, deadline, badge }: SeatProps) {
   const teamColor = player ? (TEAM_OF_SEAT[player.seat] === 0 ? '#38bdf8' : '#fb923c') : '#94a3b8';
   const vertical = rel === 1 || rel === 3;
   return (
-    <div className={cn('absolute z-20 flex flex-col items-center gap-1', POS[rel], vertical ? 'max-w-[96px]' : 'max-w-[160px]')}>
+    <div
+      className={cn(
+        'absolute z-20 flex items-center gap-1',
+        // المقعد العلوي (الشريك): الترتيب من الأعلى للأسفل المقلوب حتى تبقى أوراقه بعيدة عن مركز الطاولة
+        rel === 2 ? 'flex-col-reverse' : 'flex-col',
+        POS[rel],
+        vertical ? 'max-w-[96px]' : 'max-w-[170px]',
+      )}
+    >
       <div className="relative">
         <Avatar emoji={player?.avatar ?? '🪑'} size={52} frame={player?.isBot ? 'gold' : null} />
         {isTurn && <TimerRing until={deadline} />}
@@ -88,13 +116,17 @@ function Seat({ player, rel, isTurn, isDealer, handCount, bid, passed, bestBid, 
           <span className={cn('rounded-full px-2 text-[11px] font-extrabold', bestBid === bid ? 'bg-gold-500 text-felt-950' : 'bg-white/15')}>{bid}</span>
         )}
         {passed && <span className="rounded-full bg-rose-900/80 px-2 text-[10px] font-bold text-rose-200">مرّر</span>}
+        {badge}
       </div>
 
-      {handCount > 0 && (
-        <div className="scale-[0.85]">
-          <CardStack count={handCount} back={cardBack} size="xs" />
-        </div>
-      )}
+      {handCount > 0 &&
+        (rel === 2 ? (
+          <CardRow count={handCount} back={cardBack} />
+        ) : (
+          <div className="scale-[0.85]">
+            <CardStack count={handCount} back={cardBack} size="xs" />
+          </div>
+        ))}
     </div>
   );
 }
@@ -113,12 +145,23 @@ interface TableProps {
   cardBack: string;
   shake?: boolean;
   children?: React.ReactNode;
+  /** شارة وسط الطاولة (تُستخدم في التركس لعرض التسمية) بدل شارة الطرنيب */
+  badge?: React.ReactNode;
+  /** شارة أسفل كل مقعد (بدل الطلبات والتمرير) */
+  seatBadge?: (seat: number) => React.ReactNode;
+  /** سطر التلميح أسفل اليد */
+  hint?: React.ReactNode;
+  /** سطر معلومات فوق اليد */
+  footer?: React.ReactNode;
+  /** إخفاء أوراق الأكلة في الوسط (لأن التركس يعرض المجموعات) */
+  hideTrick?: boolean;
 }
 
-export function GameTable({ state, onPlayCard, cardBack, shake, children }: TableProps) {
+export function GameTable({ state, onPlayCard, cardBack, shake, children, badge, seatBadge, hint, footer, hideTrick }: TableProps) {
   const mySeat = state.mySeat;
   const relOf = (seat: number) => relativeSeat(mySeat, seat) as 0 | 1 | 2 | 3;
-  const turnDeadline = state.phase === 'bidding' || state.phase === 'playing' ? state.deadline : null;
+  const turnDeadline =
+    state.phase === 'bidding' || state.phase === 'playing' || state.phase === 'choosing' || state.phase === 'reveal' ? state.deadline : null;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col px-2">
@@ -127,7 +170,8 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children }: Tabl
         <div className="pointer-events-none absolute inset-0 opacity-[0.14] [background:repeating-linear-gradient(45deg,rgba(255,255,255,.06)_0_2px,transparent_2px_6px)]" />
 
         {/* شارات الوسط */}
-        <div className="absolute left-1/2 top-1/2 z-[5] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
+        <div className="absolute left-1/2 top-1/2 z-[5] flex max-w-[92%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
+          {badge}
           <AnimatePresence>
             {state.trump && (
               <motion.div
@@ -153,7 +197,7 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children }: Tabl
         </div>
 
         {/* أوراق الأكلة */}
-        <div className="absolute inset-0 z-10">
+        <div className={cn('absolute inset-0 z-10', hideTrick && 'hidden')}>
           <AnimatePresence>
             {state.trick.map((tc) => (
               <motion.div
@@ -181,11 +225,12 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children }: Tabl
               isTurn={state.turn === seat && (state.phase === 'bidding' || state.phase === 'playing')}
               isDealer={state.dealer === seat}
               handCount={state.handCounts[seat] ?? 0}
-              bid={state.roundBids?.[seat] ?? null}
-              passed={(state.bid.passed ?? []).includes(seat)}
+              bid={seatBadge ? null : state.roundBids?.[seat] ?? null}
+              passed={seatBadge ? false : (state.bid.passed ?? []).includes(seat)}
               bestBid={state.bid.value}
               cardBack={cardBack}
               deadline={turnDeadline}
+              badge={seatBadge ? seatBadge(seat) : null}
             />
           );
         })}
@@ -196,11 +241,13 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children }: Tabl
       {/* منطقة أوراقي */}
       <div className="relative mt-2">
         <div className="mb-1 flex items-center justify-between px-2 text-[11px] text-ink-300">
-          <span>
-            أوراقك: {state.myHand.length}
-            {' • '}أكلات فريقك: {state.tricksWon[state.myTeam]}
-          </span>
-          {state.isMyTurn && state.phase === 'playing' && <span className="font-bold text-gold-300">دورك الآن</span>}
+          {footer ?? (
+            <span>
+              أوراقك: {state.myHand.length}
+              {' • '}أكلات فريقك: {state.tricksWon[state.myTeam]}
+            </span>
+          )}
+          {state.isMyTurn && (state.phase === 'playing' || state.phase === 'choosing') && <span className="font-bold text-gold-300">دورك الآن</span>}
           {!state.isMyTurn && (state.phase === 'bidding' || state.phase === 'playing') && (
             <span className="truncate">{(state.seats[state.turn]?.name ?? '') + ' يفكر…'}</span>
           )}
@@ -229,9 +276,10 @@ export function GameTable({ state, onPlayCard, cardBack, shake, children }: Tabl
             );
           })}
         </div>
-        {state.phase === 'playing' && state.isMyTurn && state.trick.length > 0 && (
-          <div className="mt-1 text-center text-xs text-ink-300">اختر ورقة — يجب اتباع اللون إن كان متاحاً</div>
-        )}
+        {hint ??
+          (state.phase === 'playing' && state.isMyTurn && state.trick.length > 0 ? (
+            <div className="mt-1 text-center text-xs text-ink-300">اختر ورقة — يجب اتباع اللون إن كان متاحاً</div>
+          ) : null)}
       </div>
     </div>
   );

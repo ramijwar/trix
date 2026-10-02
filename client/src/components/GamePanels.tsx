@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import type { RoomState } from '../game/types';
+import type { RoomState, RoundSummary as RoundSummaryData } from '../game/types';
 import { SUIT_SYMBOL, type Suit } from '../game/types';
 import { cn } from '../lib/utils';
 import { Button, Modal } from './ui';
@@ -139,7 +139,8 @@ export function BidPanel({
 
 /* ============================ ملخص الجولة ============================ */
 export function RoundSummary({ state, onContinue }: { state: RoomState; onContinue: () => void }) {
-  const s = state.lastRoundSummary;
+  // ملخص الجولة خاص بالطرنيب — التركس له ملخصه داخل TrixView
+  const s = state.lastRoundSummary as RoundSummaryData | null;
   const show = state.phase === 'round_end' && Boolean(s);
   const [left, setLeft] = useState(7);
   useEffect(() => {

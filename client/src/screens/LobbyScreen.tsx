@@ -42,10 +42,18 @@ export function LobbyScreen() {
     return () => clearInterval(id);
   }, [load]);
 
-  const quickPlay = async () => {
-    setBusy('quick');
+  const quickPlay = async (game: 'tarnib' | 'trix' = 'tarnib') => {
+    setBusy(game === 'trix' ? 'quick2' : 'quick');
     try {
-      const res = await api<{ room: { roomId: string; roomCode: string } }>('room/quick', { settings: { target: 31 } });
+      const res = await api<{ room: { roomId: string; roomCode: string } }>('room/quick', { settings: { game, kingdoms: 1, target: 31 } });
+      // أكمل الطاولة بالبوتات ليبدأ اللعب فوراً
+      for (let i = 0; i < 3; i++) {
+        try {
+          await api('room/bot/add', { room: res.room.roomId });
+        } catch {
+          break;
+        }
+      }
       toast('تم إيجاد طاولة — بالتوفيق! 🎉', 'success');
       enterRoom(res.room.roomId, res.room.roomCode);
     } catch (e) {
@@ -146,9 +154,13 @@ export function LobbyScreen() {
 
         {/* الأزرار الرئيسية */}
         <div className="mb-3 grid grid-cols-2 gap-2">
-          <Button variant="gold" size="lg" loading={busy === 'quick'} onClick={() => void quickPlay()} className="h-16 flex-col !gap-0.5">
+          <Button variant="gold" size="lg" loading={busy === 'quick'} onClick={() => void quickPlay('tarnib')} className="h-16 flex-col !gap-0.5">
             <span className="text-xl">⚡</span>
-            <span className="text-sm">لعبة سريعة</span>
+            <span className="text-sm">طرنيب سريع</span>
+          </Button>
+          <Button variant="blue" size="lg" loading={busy === 'quick2'} onClick={() => void quickPlay('trix')} className="h-16 flex-col !gap-0.5 !bg-emerald-600">
+            <span className="text-xl">🧩</span>
+            <span className="text-sm">تركس سريع</span>
           </Button>
           <Button variant="blue" size="lg" onClick={() => setCreateOpen(true)} className="h-16 flex-col !gap-0.5">
             <span className="text-xl">➕</span>
@@ -200,7 +212,7 @@ export function LobbyScreen() {
               className="glass flex w-full items-center gap-3 rounded-2xl p-3 text-right transition active:scale-[.99]"
             >
               <div className={cn('flex size-11 items-center justify-center rounded-2xl text-xl', r.status === 'playing' ? 'bg-rose-500/20' : 'bg-emerald-500/20')}>
-                {r.status === 'playing' ? '🔥' : '🪑'}
+                {r.status === 'playing' ? '🔥' : r.game === 'trix' ? '🧩' : '🪑'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -213,8 +225,12 @@ export function LobbyScreen() {
                     {r.humans > 0 && ` • ${r.humans} حقيقي`}
                   </span>
                   <span>•</span>
-                  <span>هدف {r.target}</span>
-                  {r.status === 'playing' && (
+                  <span className={cn(r.game === 'trix' ? 'text-emerald-300' : 'text-sky-300')}>
+                    {r.game === 'trix' ? 'تركس 🧩' : 'طرنيب 🃏'}
+                  </span>
+                  <span>•</span>
+                  <span>{r.game === 'trix' ? `${r.kingdoms ?? 4} ممالك` : `هدف ${r.target}`}</span>
+                  {r.status === 'playing' && r.game !== 'trix' && (
                     <>
                       <span>•</span>
                       <span className="text-rose-300">
@@ -256,6 +272,8 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   const toast = useStore((s) => s.toast);
   const enterRoom = useNav((s) => s.enterRoom);
   const [name, setName] = useState('');
+  const [game, setGame] = useState<'tarnib' | 'trix'>('tarnib');
+  const [kingdoms, setKingdoms] = useState<1 | 2 | 4>(4);
   const [target, setTarget] = useState<31 | 41 | 61>(31);
   const [turnTime, setTurnTime] = useState(30);
   const [allowDouble, setAllowDouble] = useState(false);
@@ -269,7 +287,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
       const res = await api<{ room: { roomId: string; roomCode: string } }>('room/create', {
         name: name.trim() || 'طاولة الأصدقاء',
         private: privateRoom,
-        settings: { target, turnTime, bidTime: turnTime, allowDouble, allowNoTrump },
+        settings: { game, kingdoms, target, turnTime, bidTime: turnTime, allowDouble, allowNoTrump },
       });
       toast(`تم إنشاء الطاولة — الرمز ${res.room.roomCode}`, 'success');
       onClose();
@@ -285,6 +303,26 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
     <Modal open={open} onClose={onClose} title="إنشاء طاولة جديدة">
       <div className="space-y-4">
         <div>
+          <label className="mb-1 block text-xs text-ink-300">نوع اللعبة</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setGame('tarnib')}
+              className={cn('rounded-2xl px-3 py-2.5 text-right transition', game === 'tarnib' ? 'bg-sky-600 text-white' : 'bg-white/8')}
+            >
+              <span className="block text-sm font-black">🃏 طرنيب</span>
+              <span className="block text-[10px] opacity-80">شراكة • طلب ٧–١٣ • هدف {target}</span>
+            </button>
+            <button
+              onClick={() => setGame('trix')}
+              className={cn('rounded-2xl px-3 py-2.5 text-right transition', game === 'trix' ? 'bg-emerald-600 text-white' : 'bg-white/8')}
+            >
+              <span className="block text-sm font-black">🧩 تركس</span>
+              <span className="block text-[10px] opacity-80">فردي • ٥ تسميات • ختيار الكبة</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
           <label className="mb-1 block text-xs text-ink-300">اسم الطاولة</label>
           <input
             value={name}
@@ -294,7 +332,25 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
           />
         </div>
 
-        <div>
+        {game === 'trix' && (
+          <div>
+            <label className="mb-1 block text-xs text-ink-300">عدد الممالك (طول المباراة)</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([1, 2, 4] as const).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setKingdoms(k)}
+                  className={cn('rounded-2xl py-2 text-sm font-bold transition', kingdoms === k ? 'bg-emerald-500 text-felt-950' : 'bg-white/8 text-ink-100')}
+                >
+                  {k === 1 ? 'سريعة (١)' : k === 2 ? 'متوسطة (٢)' : 'كاملة (٤)'}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-ink-500">كل مملكة = ٥ تسميات (الكبة، البنات، الديناري، اللطوش، التركس) = ٢٠ توزيعة في المباراة الكاملة.</p>
+          </div>
+        )}
+
+        <div className={cn(game === 'trix' && 'hidden')}>
           <label className="mb-1 block text-xs text-ink-300">النقاط المطلوبة للفوز</label>
           <div className="grid grid-cols-3 gap-2">
             {([31, 41, 61] as const).map((t) => (
@@ -326,8 +382,15 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
 
         <div className="space-y-2">
           {[
-            { label: 'السماح بالمضاعفة (دبل)', value: allowDouble, set: setAllowDouble, hint: 'الخصم يضاعف الطلب ×2' },
-            { label: 'السماح بطلب بدون طرنيب', value: allowNoTrump, set: setAllowNoTrump, hint: 'وضع احترافي' },
+            {
+              label: 'السماح بالمضاعفة (دبل)',
+              value: allowDouble,
+              set: setAllowDouble,
+              hint: game === 'trix' ? 'كشف البنات وختيار الكبة لمضاعفة النقاط' : 'الخصم يضاعف الطلب ×2',
+            },
+            ...(game === 'trix'
+              ? []
+              : [{ label: 'السماح بطلب بدون طرنيب', value: allowNoTrump, set: setAllowNoTrump, hint: 'وضع احترافي' }]),
             { label: 'طاولة خاصة', value: privateRoom, set: setPrivateRoom, hint: 'لا تظهر في القائمة' },
           ].map((row) => (
             <button
@@ -349,7 +412,11 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
         <Button variant="gold" full size="lg" loading={busy} onClick={() => void create()}>
           إنشاء الطاولة
         </Button>
-        <p className="text-center text-[11px] text-ink-500">الشركاء: كل لاعبين متقابلين فريق واحد — يمكنك دعوة صديق ليجلس مقابل لك.</p>
+        <p className="text-center text-[11px] text-ink-500">
+          {game === 'trix'
+            ? 'التركس لعبة فردية: كل لاعب لنفسه، والفائز صاحب أعلى مجموع — يمكنك إضافة بوتات للتدريب.'
+            : 'الشركاء: كل لاعبين متقابلين فريق واحد — يمكنك دعوة صديق ليجلس مقابل لك.'}
+        </p>
       </div>
     </Modal>
   );

@@ -110,6 +110,17 @@ export class RoomSession {
 
   /* ============================ الإجراءات ============================ */
 
+  /** اختيار تسمية في التركس (صاحب المملكة) */
+  chooseContract(contract: string): Promise<void> {
+    return this.act('game/contract', { contract });
+  }
+
+  /** كشف/تدبيل ورقة معاقِبة أو تأكيد الجاهزية لبدء اللعب */
+  reveal(card?: string, done = false): Promise<void> {
+    return this.act('game/reveal', { card: card ?? '', done: done || !card });
+  }
+
+
   bid(action: 'bid' | 'pass' | 'double', value?: number): Promise<void> {
     return this.act('game/bid', { action, value }, (s) => {
       if (action === 'bid' && value) {

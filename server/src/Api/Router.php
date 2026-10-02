@@ -88,6 +88,8 @@ final class Router
                 case 'game/bid': RoomApi::bid(); return;
                 case 'game/trump': RoomApi::trump(); return;
                 case 'game/play': RoomApi::play(); return;
+                case 'game/contract': RoomApi::contract(); return;
+                case 'game/reveal': RoomApi::reveal(); return;
 
                 default:
                     Http::fail('مسار غير معروف: ' . $route, 404, 'not_found');

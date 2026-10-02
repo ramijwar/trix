@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import type { RoomSettings, RoomState, Suit } from '../game/types';
+import type { RoomSettings, RoomState, Suit, TrixContract } from '../game/types';
 import { TEAM_COLORS, cn, shareText } from '../lib/utils';
 import { Avatar, Button, Confetti, EmptyState, Modal, Panel, SectionTitle } from './ui';
 import { GameTable } from './GameTable';
 import { BidPanel, ChatDrawer, GameOver, RoundSummary, ScoreBar } from './GamePanels';
+import { TrixView } from './TrixView';
 import { useGameSounds } from '../hooks/useGameSounds';
+import { useStore } from '../lib/store';
 import { keepScreenOn } from '../lib/native';
 
 /** الإجراءات الموحّدة بين اللعب أونلاين واللعب المحلي */
 export interface RoomActions {
   bid: (action: 'bid' | 'pass' | 'double', value?: number) => void;
   trump: (suit: Suit | 'NT') => void;
+  /** اختيار تسمية في التركس (صاحب المملكة) */
+  chooseContract?: (contract: TrixContract) => void;
+  /** كشف/تدبيل ورقة، أو تأكيد الجاهزية لبدء اللعب */
+  reveal?: (card?: string, done?: boolean) => void;
   play: (code: string) => void;
   chat: (text: string, emoji?: string) => void;
   continueRound: () => void;
@@ -58,6 +64,7 @@ export function GameView({
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [shake, setShake] = useState(false);
+  const isTrix = state.game === 'trix' || state.settings?.game === 'trix';
   useGameSounds(state, state.mySeat);
 
   useEffect(() => {
@@ -73,6 +80,11 @@ export function GameView({
     }
     actions.play(code);
   };
+
+  // لعبة التركس لها واجهتها الخاصة (تسميات، مجموعات، تدبيل)
+  if (isTrix) {
+    return <TrixView state={state} actions={actions} status={status} onExit={onExit} />;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -149,12 +161,23 @@ export function WaitingRoom({
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const toast = useStore((s) => s.toast);
   const me = state.seats[state.mySeat];
   const filled = state.seats.filter(Boolean).length;
   const freeSeats = state.seats.map((p, i) => (p === null && i !== state.mySeat ? i : -1)).filter((i) => i >= 0);
 
+  /** زر النسخ: ينسخ رمز الغرفة وحده فقط ليلصقه اللاعبون مباشرة */
   const copyCode = async () => {
-    await shareText(`انضم إلى طاولتي في الطرنيب! الرمز: ${state.roomCode}`, 'طرنيب أونلاين');
+    const { copyText, nativeToast } = await import('../lib/native');
+    const done = await copyText(state.roomCode);
+    nativeToast(done ? 'تم نسخ الرمز ✅' : 'تعذّر النسخ');
+    toast(done ? `تم نسخ الرمز ${state.roomCode}` : 'تعذّر نسخ الرمز', done ? 'success' : 'error');
+  };
+
+  /** زر الدعوة: رسالة كاملة للمشاركة مع الأصدقاء */
+  const invite = async () => {
+    const gameName = state.settings?.game === 'trix' ? 'التركس' : 'الطرنيب';
+    await shareText(`انضم إليّ في طاولة ${gameName}! رمز الغرفة: ${state.roomCode}`, 'طرنيب وتركس أونلاين');
   };
 
   const seatLabel = (seat: number) => {
@@ -169,9 +192,15 @@ export function WaitingRoom({
           ← خروج
         </button>
         <div className="text-center">
-          <div className="text-sm font-black">{state.roomName || 'طاولة'}</div>
+          <div className="text-sm font-black">
+            {state.roomName || 'طاولة'}{' '}
+            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-black', state.settings?.game === 'trix' ? 'bg-emerald-600/60' : 'bg-sky-600/60')}>
+              {state.settings?.game === 'trix' ? 'تركس 🧩' : 'طرنيب 🃏'}
+            </span>
+          </div>
           <div className="text-[11px] text-ink-300">
-            {filled}/4 لاعبين • هدف {state.target}
+            {filled}/4 لاعبين •{' '}
+            {state.settings?.game === 'trix' ? `${state.settings?.kingdoms ?? 4} ممالك • لعبة فردية` : `هدف ${state.target}`}
           </div>
         </div>
         <button onClick={() => setChatOpen(true)} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
@@ -188,16 +217,46 @@ export function WaitingRoom({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button variant="ghost" onClick={() => void copyCode()}>
-              📤 مشاركة
+              📋 نسخ الرمز
             </Button>
             <Button variant="gold" onClick={() => actions.ready?.(!me?.ready)}>
               {me?.ready ? '✅ جاهز — إلغاء' : 'أنا جاهز'}
             </Button>
           </div>
+          <button onClick={() => void invite()} className="mt-2 w-full rounded-2xl bg-white/5 py-2 text-xs text-ink-300">
+            📤 أو دعوة صديق برسالة جاهزة
+          </button>
+        </Panel>
+
+        {/* نوع اللعبة */}
+        <Panel className={cn('mb-3 border', state.settings?.game === 'trix' ? 'border-emerald-500/30' : 'border-sky-500/30')}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-sm font-black">
+                {state.settings?.game === 'trix' ? '🧩 لعبة التركس' : '🃏 لعبة الطرنيب'}
+              </div>
+              <div className="text-[11px] leading-relaxed text-ink-300">
+                {state.settings?.game === 'trix'
+                  ? 'لعبة فردية بـ٥ تسميات: ختيار الكبة، البنات، الديناري، اللطوش، والتركس — الأعلى نقاطاً يفوز.'
+                  : 'لعبة شراكة: أنت وشريكك (المقابل) فريق واحد مقابل الفريق الآخر.'}
+              </div>
+            </div>
+            {state.isHost ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => actions.saveSettings?.({ game: state.settings?.game === 'trix' ? 'tarnib' : 'trix' })}
+              >
+                تبديل إلى {state.settings?.game === 'trix' ? 'طرنيب' : 'تركس'}
+              </Button>
+            ) : null}
+          </div>
         </Panel>
 
         {/* المقاعد */}
-        <SectionTitle icon={<span>🪑</span>}>المقاعد والفريقان</SectionTitle>
+        <SectionTitle icon={<span>🪑</span>}>
+          {state.settings?.game === 'trix' ? 'اللاعبون (فردي)' : 'المقاعد والفريقان'}
+        </SectionTitle>
         <div className="mb-3 grid grid-cols-2 gap-2">
           {state.seats.map((p, seat) => {
             const team = seat % 2;
