@@ -36,7 +36,6 @@ export function OfflineRoom() {
           if (Date.now() - trickFullAt.current > 950) {
             live.resolveTrick();
             trickFullAt.current = 0;
-            live.maybeBotChat();
           }
         } else {
           trickFullAt.current = 0;

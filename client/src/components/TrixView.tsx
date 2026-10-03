@@ -380,7 +380,13 @@ export function TrixView({
         <TrixGameOver state={state} onExit={onExit} onRematch={() => actions.continueRound()} />
       )}
 
-      <ChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} state={state} onSend={(t, e) => actions.chat(t, e)} />
+      <ChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        state={state}
+        onSend={(t, e) => actions.chat(t, e)}
+        onSendVoice={actions.voice}
+      />
 
       <Modal open={menuOpen} onClose={() => setMenuOpen(false)} title="قائمة الطاولة">
         <div className="space-y-2">

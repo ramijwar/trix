@@ -94,7 +94,7 @@ export function useGameSounds(state: RoomState | null, mySeat: number | null) {
 
     // رسائل الشات الجديدة
     const chats = state.chat ?? [];
-    const newChats = chats.filter((c) => c.id > lastChat.current);
+    const newChats = chats.filter((c) => c.id > lastChat.current && c.seat !== null);
     if (newChats.length) {
       lastChat.current = Math.max(...newChats.map((c) => c.id));
       if (newChats.some((c) => c.seat !== mySeat)) sfx('chat');

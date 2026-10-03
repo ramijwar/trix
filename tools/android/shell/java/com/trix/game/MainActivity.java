@@ -1,5 +1,6 @@
 package com.trix.game;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ClipData;
@@ -7,6 +8,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,6 +18,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -44,9 +47,13 @@ public class MainActivity extends Activity {
     private static final String START_URL = "https://" + APP_HOST + "/index.html";
     private static final String PREFS_NAME = "trix_native";
 
+    private static final int REQ_MIC = 4711;
+
     private WebView web;
     private SharedPreferences store;
     private long lastBackPress = 0L;
+    /** طلب إذن الصفحة (الميكروفون) بانتظار موافقة المستخدم */
+    private PermissionRequest pendingPermission;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -108,7 +115,34 @@ public class MainActivity extends Activity {
             }
         });
 
-        web.setWebChromeClient(new WebChromeClient());
+        /* منح الصفحة إذن الميكروفون حتى تعمل رسائل الدردشة الصوتية */
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean wantsAudio = false;
+                        for (String resource : request.getResources()) {
+                            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+                                wantsAudio = true;
+                            }
+                        }
+                        if (!wantsAudio) {
+                            return; // نرفض أي إذن آخر (كاميرا/موقع) بالصمت
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                                && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                                != PackageManager.PERMISSION_GRANTED) {
+                            pendingPermission = request;
+                            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+                            return;
+                        }
+                        request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                    }
+                });
+            }
+        });
         web.addJavascriptInterface(new Bridge(), "TrixNative");
 
         setContentView(web);
@@ -280,6 +314,26 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String getInfo() {
             return "{\"platform\":\"android\",\"version\":\"1.0.0\",\"sdk\":" + Build.VERSION.SDK_INT + "}";
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQ_MIC) {
+            return;
+        }
+        PermissionRequest request = pendingPermission;
+        pendingPermission = null;
+        if (request == null) {
+            return;
+        }
+        boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+        if (granted) {
+            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+        } else {
+            request.deny();
+            Toast.makeText(this, "يجب السماح بالميكروفون لإرسال رسالة صوتية", Toast.LENGTH_LONG).show();
         }
     }
 

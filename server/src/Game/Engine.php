@@ -154,11 +154,19 @@ final class Engine
         self::log($s, 'turn', ['seat' => (int) $s['turn']]);
     }
 
-    public static function chat(array &$s, ?int $seat, string $text, ?string $emoji = null): void
+    public static function chat(array &$s, ?int $seat, string $text, ?string $emoji = null, ?array $voice = null): void
     {
         $s['chatId'] = (int) ($s['chatId'] ?? 0) + 1;
-        $name = $seat === null ? 'النظام' : (string) ($s['seats'][$seat]['name'] ?? '—');
-        $s['chat'][] = ['id' => $s['chatId'], 'seat' => $seat, 'name' => $name, 'text' => mb_substr($text, 0, 200), 'emoji' => $emoji, 'at' => time()];
+        $name = $seat === null ? '—' : (string) ($s['seats'][$seat]['name'] ?? '—');
+        $msg = ['id' => $s['chatId'], 'seat' => $seat, 'name' => $name, 'text' => mb_substr($text, 0, 200), 'emoji' => $emoji, 'at' => time()];
+        if ($voice !== null && $seat !== null) {
+            $msg['text'] = '';
+            $msg['emoji'] = null;
+            $msg['voice'] = (string) ($voice['id'] ?? '');
+            $msg['dur'] = (int) ($voice['dur'] ?? 0);
+            $msg['mime'] = (string) ($voice['mime'] ?? 'audio/webm');
+        }
+        $s['chat'][] = $msg;
         if (count($s['chat']) > 80) {
             $s['chat'] = array_slice($s['chat'], -80);
         }

@@ -148,6 +148,19 @@ section('🃏 الغرف والمقاعد والإعدادات');
 
   const chat = await call('room/chat', { room: roomId, text: 'أهلاً بالجميع 👋', emoji: '👋' }, { token });
   check('room/chat يرسل رسالة', chat.json.ok === true && chat.json.room?.chat?.length > 0);
+  check('الدردشة نظيفة: لا رسائل نظام', (chat.json.room?.chat ?? []).every((m) => m.seat !== null), JSON.stringify(chat.json.room?.chat ?? []).slice(0, 140));
+
+  // رسالة صوتية قصيرة (مقطع تجريبي base64)
+  const clip = Buffer.alloc(1024, 7).toString('base64');
+  const voice = await call('room/voice', { room: roomId, audio: clip, dur: 3, mime: 'audio/webm' }, { token });
+  const voiceMsg = (voice.json.room?.chat ?? []).slice(-1)[0];
+  check('room/voice يرسل رسالة صوتية', voice.json.ok === true && !!voiceMsg?.voice && voiceMsg?.dur === 3, JSON.stringify(voice.json).slice(0, 140));
+  const got = await call('voice/get', { id: voiceMsg?.voice ?? '', room: roomId }, { token });
+  check('voice/get يرجع المقطع نفسه', got.json.ok === true && got.json.audio === clip && String(got.json.mime).startsWith('audio/'), JSON.stringify(got.json).slice(0, 120));
+  const big = await call('room/voice', { room: roomId, audio: Buffer.alloc(700 * 1024, 1).toString('base64'), dur: 5, mime: 'audio/webm' }, { token, expectOk: false });
+  check('room/voice يرفض المقاطع الكبيرة', big.json.ok === false && big.status === 413, `status=${big.status}`);
+  const badDur = await call('room/voice', { room: roomId, audio: clip, dur: 0, mime: 'audio/webm' }, { token, expectOk: false });
+  check('room/voice يرفض مدة غير صالحة', badDur.json.ok === false && badDur.status === 422, `status=${badDur.status}`);
 
   const rename = await call('room/rename', { room: roomId, name: 'طاولة معاد تسميتها' }, { token });
   check('room/rename يعمل لصاحب الغرفة', rename.json.ok === true && rename.json.room?.roomName === 'طاولة معاد تسميتها');

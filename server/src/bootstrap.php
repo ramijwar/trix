@@ -40,6 +40,7 @@ require_once __DIR__ . '/Core/Config.php';
 require_once __DIR__ . '/Core/Http.php';
 require_once __DIR__ . '/Core/Db.php';
 require_once __DIR__ . '/Core/Auth.php';
+require_once __DIR__ . '/Core/Voice.php';
 require_once __DIR__ . '/Core/Schema.php';
 require_once __DIR__ . '/Game/Engine.php';
 require_once __DIR__ . '/Core/Rooms.php';

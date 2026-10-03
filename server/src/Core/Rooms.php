@@ -481,7 +481,6 @@ final class Rooms
             ];
             if (($state['phase'] ?? 'waiting') === 'waiting') {
                 Engine::log($state, 'join', ['seat' => $target, 'name' => (string) $user['display_name']]);
-                Engine::chat($state, null, (string) $user['display_name'] . ' انضم إلى الطاولة');
             }
             return ['seat' => $target];
         });
@@ -502,10 +501,8 @@ final class Rooms
                 $state['seats'][$seat]['isBot'] = true;
                 $state['seats'][$seat]['connected'] = false;
                 $state['seats'][$seat]['name'] = (string) $state['seats'][$seat]['name'];
-                Engine::chat($state, null, (string) $state['seats'][$seat]['name'] . ' خرج من المباراة — تم استكماله بالبوت');
                 return [];
             }
-            Engine::chat($state, null, (string) $state['seats'][$seat]['name'] . ' غادر الطاولة');
             $state['seats'][$seat] = null;
             if ((int) $r['host_id'] === (int) $user['id']) {
                 $nextHost = null;
@@ -641,7 +638,6 @@ final class Rooms
                 $state['seats'][$mySeat] = $a;
                 $state['seats'][$from] = $b;
                 Engine::log($state, 'swap_done', ['a' => $from, 'b' => $mySeat]);
-                Engine::chat($state, null, 'تم تبديل المقاعد');
             } else {
                 Engine::log($state, 'swap_declined', ['seat' => $mySeat]);
             }
@@ -830,11 +826,6 @@ final class Rooms
             $newState['swap'] = [];
             $newState['settings'] = $settings;
             $newState['recorded'] = false;
-            if (($settings['game'] ?? 'tarnib') === 'trix') {
-                Trix::chat($newState, null, 'بدأت مباراة التركس — ٤ ممالك × ٥ تسميات 🧩');
-            } else {
-                Engine::chat($newState, null, 'بدأت المباراة — الهدف ' . $settings['target'] . ' نقطة');
-            }
             foreach ($newState['seats'] as $i => $pl) {
                 if ($pl !== null) {
                     $newState['seats'][$i]['ready'] = true;
@@ -865,7 +856,6 @@ final class Rooms
             if ((int) $state['seats'][$seat]['userId'] === (int) $user['id']) {
                 Http::fail('لا يمكنك طرد نفسك', 422);
             }
-            Engine::chat($state, null, (string) $state['seats'][$seat]['name'] . ' تم إخراجه من الطاولة');
             $state['seats'][$seat] = null;
             return [];
         });
@@ -937,7 +927,6 @@ final class Rooms
                         $newState['seats'][$i]['ready'] = true;
                     }
                 }
-                Engine::chat($newState, null, 'مباراة جديدة — بالتوفيق للجميع! 🎉');
                 foreach ($newState as $k => $v) {
                     $state[$k] = $v;
                 }
@@ -1092,7 +1081,6 @@ final class Rooms
             $isWinner = ((int) $i % 2) === $winner;
             Users::recordResult($userId, $isWinner, $kabootTeam !== null && $kabootTeam === ((int) $i % 2), max(1, (int) ($state['round'] ?? 1) - 1));
         }
-        Engine::chat($state, null, $winner === 0 ? 'فاز الفريق الأول بالمباراة 🏆' : 'فاز الفريق الثاني بالمباراة 🏆');
     }
 
     /** تسجيل نتيجة مباراة التركس (لعبة فردية — الفائز صاحب أعلى مجموع) */
@@ -1125,7 +1113,6 @@ final class Rooms
             }
             Users::recordResult((int) $pl['userId'], (int) $i === $winner, false, max(1, (int) ($state['dealNo'] ?? 1) - 1));
         }
-        Trix::chat($state, null, 'انتهت مباراة التركس 🏆');
     }
 
     /* ============================ العرض ============================ */

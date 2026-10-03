@@ -5,6 +5,7 @@
  * - تحديثات متفائلة للواجهة (تظهر ورقتك فوراً قبل تأكيد الخادم)
  */
 import { api, ApiError } from './api';
+import { blobToBase64 } from './media';
 import { TRIX_CONTRACT_AR, TRIX_CONTRACT_ICON } from '../game/types';
 import type { RoomState, TrixContract, WireChat } from '../game/types';
 
@@ -179,6 +180,12 @@ export class RoomSession {
 
   chat(text: string, emoji?: string): Promise<void> {
     return this.act('room/chat', { text, emoji });
+  }
+
+  /** إرسال رسالة صوتية قصيرة (base64) */
+  async voice(blob: Blob, duration: number, mime: string): Promise<void> {
+    const audio = await blobToBase64(blob);
+    await this.act('room/voice', { room: this.roomId, audio, dur: Math.max(1, Math.round(duration)), mime });
   }
 
   ready(ready: boolean): Promise<void> {

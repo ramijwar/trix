@@ -410,15 +410,6 @@ export class OfflineMatch {
     }
   }
 
-  /** إرسال رسالة من بوت أحياناً */
-  maybeBotChat(): void {
-    if (Math.random() > 0.12) return;
-    const seat = [0, 1, 2, 3].find((s) => this.seats[s].isBot);
-    if (seat === undefined) return;
-    const phrases = ['يلا بينا 💪', 'ورق حلو 🍀', 'برافو 👏', 'ركّز معي 😅', 'الله يعين 😩', 'دورك 🙌'];
-    this.pushChat(seat, phrases[Math.floor(Math.random() * phrases.length)]);
-  }
-
   /* ============================ اللقطة العامة ============================ */
 
   snapshot(): RoomState {

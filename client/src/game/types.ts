@@ -257,6 +257,11 @@ export interface ChatMessage {
   emoji?: string;
   at: number;
   system?: boolean;
+  /** معرّف رسالة صوتية (إن كانت الرسالة صوتية) */
+  voice?: string | null;
+  /** مدة الرسالة الصوتية بالثواني */
+  dur?: number | null;
+  mime?: string | null;
 }
 
 /** ============================ أدوات الورق ============================ */
@@ -443,6 +448,11 @@ export interface WireChat {
   text: string;
   emoji?: string;
   at: number;
+  /** معرّف رسالة صوتية (إن كانت الرسالة صوتية) */
+  voice?: string | null;
+  /** مدة الرسالة الصوتية بالثواني */
+  dur?: number | null;
+  mime?: string | null;
 }
 
 export interface SwapRequest {

@@ -6,12 +6,23 @@ namespace Trix\Api;
 use Trix\Core\Auth;
 use Trix\Core\Http;
 use Trix\Core\Rooms;
+use Trix\Core\Voice;
 use Trix\Game\Engine;
 use Trix\Game\Trix;
 
 /** مسارات الغرف واللعب */
 final class RoomApi
 {
+    /** إضافة رسالة دردشة إلى محرّك اللعبة المناسب للغرفة */
+    private static function addChat(array &$state, ?int $seat, string $text, ?string $emoji = null, ?array $voice = null): void
+    {
+        if (((string) ($state['settings']['game'] ?? 'tarnib')) === 'trix') {
+            Trix::chat($state, $seat, $text, $emoji, $voice);
+            return;
+        }
+        Engine::chat($state, $seat, $text, $emoji, $voice);
+    }
+
     /** إرجاع حالة الغرفة كما يراها المستخدم الحالي */
     private static function viewOf(array $room, int $userId): array
     {
@@ -186,10 +197,59 @@ final class RoomApi
             if ($seat === null) {
                 Http::fail('أنت لست في هذه الطاولة', 403);
             }
-            Engine::chat($state, $seat, $text, $emoji !== '' ? $emoji : null);
+            self::addChat($state, $seat, $text, $emoji !== '' ? $emoji : null);
             return [];
         });
         Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
+    }
+
+    /** إرسال رسالة صوتية قصيرة (تُحفظ كملف ويُرسل معرّفها في الدردشة) */
+    public static function voiceUpload(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $audio = Http::str('audio');
+        if ($audio === '') {
+            Http::fail('لم يصل أي مقطع صوتي', 422, 'no_audio');
+        }
+        $duration = Http::int('dur', 0);
+        if ($duration <= 0 || $duration > Voice::MAX_SECONDS) {
+            Http::fail('مدة المقطع غير مسموحة (الحد ' . Voice::MAX_SECONDS . ' ثانية)', 422, 'bad_duration');
+        }
+        $saved = Voice::save($audio, Http::str('mime', 'audio/webm'), $duration);
+        $userId = (int) $user['id'];
+        $result = Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $saved) {
+            $seat = Rooms::seatOf($state, $userId);
+            if ($seat === null) {
+                Http::fail('أنت لست في هذه الطاولة', 403);
+            }
+            self::addChat($state, $seat, '', null, $saved);
+            return [];
+        });
+        Http::ok([
+            'room' => Rooms::view($result['_room'], $result['_state'], $userId),
+            'voice' => ['id' => $saved['id'], 'dur' => $saved['dur'], 'mime' => $saved['mime']],
+        ]);
+    }
+
+    /** تنزيل مقطع صوتي (base64) — للمنضمّين للطاولة فقط */
+    public static function voiceFile(): void
+    {
+        $user = Auth::requireUser();
+        $id = strtolower(Http::str('id'));
+        $file = Voice::path($id);
+        if ($file === null) {
+            Http::fail('المقطع الصوتي غير موجود', 404, 'voice_not_found');
+        }
+        $roomId = Http::str('room');
+        if ($roomId !== '') {
+            $room = Rooms::requireRoom($roomId);
+            $state = Rooms::decode($room);
+            if (Rooms::seatOf($state, (int) $user['id']) === null) {
+                Http::fail('أنت لست في هذه الطاولة', 403);
+            }
+        }
+        Http::ok(Voice::read($id));
     }
 
     /** الموافقة على بدء الجولة التالية فوراً */

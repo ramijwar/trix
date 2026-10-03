@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomState, RoundSummary as RoundSummaryData } from '../game/types';
 import { SUIT_SYMBOL, parseCard, type Suit } from '../game/types';
 import { cn, sortHand } from '../lib/utils';
+import { formatDuration, voiceUrl } from '../lib/media';
+import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { Button, Modal } from './ui';
 import { CardView } from './CardView';
 import { useStore } from '../lib/store';
@@ -273,99 +275,274 @@ export function GameOver({ state, onExit, onRematch }: { state: RoomState; onExi
   );
 }
 
-/* ============================ الشات ============================ */
-export const QUICK_PHRASES = [
-  'يلا بينا 💪',
-  'ورق حلو 🍀',
-  'برافو 👏',
-  'شكراً شركاء 🙏',
-  'ركّز معي 😅',
-  'هههه 😄',
-  'كبوت إن شاء الله 🔥',
-  'معليش، الجاية أحسن',
-  'دورك 🙌',
-  'الله يعين 😩',
-];
+/* ============================ الدردشة ============================ */
+/**
+ * مشغّل رسالة صوتية: زر تشغيل/إيقاف صغير (أيقونة) + مدة المقطع.
+ * تُجلب الرسالة من الخادم مرة واحدة ثم تُشغَّل من الذاكرة.
+ */
+function VoicePlayer({ id, dur, roomId, roomCode, mine }: { id: string; dur: number; roomId: string; roomCode: string; mine: boolean }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [pos, setPos] = useState(0);
+  const [failed, setFailed] = useState('');
+
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  const stop = () => {
+    const a = audioRef.current;
+    if (a) {
+      a.pause();
+      a.currentTime = 0;
+    }
+    setPlaying(false);
+    setPos(0);
+  };
+
+  const toggle = async () => {
+    if (playing) {
+      stop();
+      return;
+    }
+    setFailed('');
+    setLoading(true);
+    try {
+      const url = await voiceUrl(String(id), String(roomId || roomCode));
+      let a = audioRef.current;
+      if (!a) {
+        a = new Audio(url);
+        a.preload = 'auto';
+        audioRef.current = a;
+      } else if (a.src !== url) {
+        a.src = url;
+      }
+      a.onended = () => {
+        setPlaying(false);
+        setPos(0);
+      };
+      a.ontimeupdate = () => setPos(a?.currentTime ?? 0);
+      await a.play();
+      setPlaying(true);
+    } catch {
+      setFailed('تعذّر تشغيل المقطع');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const shown = playing ? pos : dur;
+  const total = Math.max(1, dur);
+  const progress = Math.min(100, Math.round(((playing ? pos : 0) / total) * 100));
+  return (
+    <div className={cn('flex items-center gap-2', mine ? 'flex-row' : 'flex-row-reverse')}>
+      <button
+        onClick={() => void toggle()}
+        className={cn(
+          'grid h-8 w-8 shrink-0 place-items-center rounded-full text-[13px] leading-none active:scale-90',
+          playing ? 'bg-rose-600 text-white' : 'bg-gold-500 text-felt-950',
+        )}
+        aria-label={playing ? 'إيقاف المقطع' : 'تشغيل المقطع'}
+        title={playing ? 'إيقاف' : 'تشغيل'}
+      >
+        {loading ? '…' : playing ? <StopIcon /> : <PlayIcon />}
+      </button>
+      <div className="min-w-[96px] flex-1">
+        <div className="mb-1 flex items-center gap-1.5">
+          <span className="text-[13px]">🎤</span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/35">
+            <div className={cn('h-full rounded-full', playing ? 'bg-rose-400' : 'bg-gold-400/70')} style={{ width: `${progress}%` }} />
+          </div>
+          <span className="w-9 shrink-0 text-center text-[10px] font-bold tabular-nums text-ink-200">{formatDuration(shown)}</span>
+        </div>
+        {failed && <div className="text-[10px] text-rose-300">{failed}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** أيقونة تشغيل صغيرة */
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+      <path d="M8 5.5v13l11-6.5-11-6.5Z" />
+    </svg>
+  );
+}
+
+/** أيقونة إيقاف صغيرة */
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
+    </svg>
+  );
+}
+
+/** أيقونة ميكروفون */
+function MicIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={cn('h-5 w-5', className)} fill="currentColor" aria-hidden="true">
+      <path d="M12 15a3.5 3.5 0 0 0 3.5-3.5V6a3.5 3.5 0 1 0-7 0v5.5A3.5 3.5 0 0 0 12 15Z" />
+      <path d="M18 11.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.9V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.6a6 6 0 0 0 5-5.9Z" />
+    </svg>
+  );
+}
 
 export function ChatDrawer({
   open,
   onClose,
   state,
   onSend,
+  onSendVoice,
 }: {
   open: boolean;
   onClose: () => void;
   state: RoomState;
   onSend: (text: string, emoji?: string) => void;
+  /** إرسال رسالة صوتية (غير متاح في اللعب المحلي ضد البوتات) */
+  onSendVoice?: (blob: Blob, duration: number, mime: string) => void;
 }) {
   const [text, setText] = useState('');
-  const messages = useMemo(() => (state.chat ?? []).slice(-40), [state.chat]);
-  const emojis = ['👍', '😂', '😮', '🔥', '😎', '🙏', '👏', '😭'];
+  const [sending, setSending] = useState(false);
+  const recorder = useVoiceRecorder(30);
+  const endRef = useRef<HTMLDivElement | null>(null);
+  const roomKey = String(state.roomId ?? state.roomCode ?? '');
+  // رسائل اللاعبين فقط — بلا رسائل نظام ولا عبارات جاهزة، دردشة نظيفة
+  const messages = useMemo(() => (state.chat ?? []).filter((m) => m.seat !== null).slice(-60), [state.chat]);
+
+  useEffect(() => {
+    if (open) endRef.current?.scrollIntoView({ block: 'end' });
+  }, [open, messages.length]);
+
+  // إغلاق الدردشة أثناء التسجيل يلغي التسجيل (لا نترك الميكروفون مفتوحاً)
+  const cancelRecording = recorder.cancel;
+  useEffect(() => {
+    if (!open) cancelRecording();
+  }, [open, cancelRecording]);
+
+  const sendText = () => {
+    const value = text.trim();
+    if (!value) return;
+    onSend(value);
+    setText('');
+  };
+
+  const finishRecording = async () => {
+    const clip = await recorder.stop();
+    if (!clip || !onSendVoice) return;
+    setSending(true);
+    try {
+      await onSendVoice(clip.blob, clip.duration, clip.mime);
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <>
       {open && (
         <>
           <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
-          <div
-            className="glass fixed inset-x-0 bottom-0 z-50 flex max-h-[75vh] flex-col rounded-t-3xl p-3"
-          >
+          <div className="glass fixed inset-x-0 bottom-0 z-50 flex max-h-[78vh] flex-col rounded-t-3xl p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="font-bold">الدردشة</span>
               <button onClick={onClose} className="rounded-xl px-2 py-1 text-ink-300 hover:bg-white/10">
                 ✕
               </button>
             </div>
+
             <div className="mb-2 flex-1 overflow-y-auto rounded-2xl bg-black/25 p-2">
-              {messages.length === 0 && <div className="py-6 text-center text-sm text-ink-300">لا رسائل بعد — قل مرحباً 👋</div>}
-              {messages.map((m) => (
-                <div key={m.id} className={cn('mb-1.5 flex', m.seat === state.mySeat ? 'justify-start' : 'justify-end')}>
-                  <div className={cn('max-w-[80%] rounded-2xl px-3 py-1.5 text-sm', m.seat === null ? 'bg-white/10 text-ink-300' : m.seat === state.mySeat ? 'bg-gold-500/25' : 'bg-white/12')}>
-                    {m.seat !== state.mySeat && m.seat !== null && <div className="text-[10px] text-ink-300">{m.name}</div>}
-                    <div>{m.text}</div>
+              {messages.length === 0 && <div className="py-6 text-center text-sm text-ink-300">لا رسائل بعد</div>}
+              {messages.map((m) => {
+                const mine = m.seat === state.mySeat;
+                const hasVoice = Boolean(m.voice);
+                return (
+                  <div key={m.id} className={cn('mb-1.5 flex', mine ? 'justify-start' : 'justify-end')}>
+                    <div
+                      className={cn(
+                        'max-w-[80%] rounded-2xl px-3 py-1.5 text-sm',
+                        mine ? 'bg-gold-500/25' : 'bg-white/12',
+                        hasVoice && 'min-w-[190px]',
+                      )}
+                    >
+                      {!mine && <div className="text-[10px] text-ink-300">{m.name}</div>}
+                      {hasVoice ? (
+                        <VoicePlayer
+                          id={String(m.voice)}
+                          dur={Number(m.dur ?? 0)}
+                          roomId={roomKey}
+                          roomCode={String(state.roomCode ?? '')}
+                          mine={mine}
+                        />
+                      ) : (
+                        <div>{m.text}</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+              <div ref={endRef} />
             </div>
-            <div className="mb-2 flex gap-1 overflow-x-auto no-scrollbar">
-              {emojis.map((e) => (
-                <button key={e} onClick={() => onSend(e, e)} className="shrink-0 rounded-xl bg-white/8 px-2 py-1 text-xl active:scale-90">
-                  {e}
+
+            {recorder.error && <div className="mb-2 rounded-xl bg-rose-900/40 px-3 py-1.5 text-center text-xs text-rose-200">{recorder.error}</div>}
+
+            {recorder.recording ? (
+              <div className="flex items-center gap-2 rounded-2xl bg-rose-950/60 px-3 py-2 ring-1 ring-rose-500/50">
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-500" />
+                <span className="text-xs font-bold tabular-nums text-rose-100">
+                  {formatDuration(recorder.seconds)} / {formatDuration(recorder.maxSeconds)}
+                </span>
+                <span className="flex-1 text-center text-[11px] text-rose-200/80">جارٍ التسجيل…</span>
+                <button
+                  onClick={recorder.cancel}
+                  className="grid h-8 w-8 place-items-center rounded-full bg-white/10 text-sm text-ink-200 active:scale-90"
+                  aria-label="إلغاء التسجيل"
+                  title="إلغاء"
+                >
+                  ✕
                 </button>
-              ))}
-            </div>
-            <div className="mb-2 grid grid-cols-2 gap-1.5">
-              {QUICK_PHRASES.slice(0, 6).map((p) => (
-                <button key={p} onClick={() => onSend(p)} className="rounded-xl bg-white/8 px-2 py-1.5 text-xs active:scale-95">
-                  {p}
+                <button
+                  onClick={() => void finishRecording()}
+                  disabled={sending}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-rose-600 text-white active:scale-90 disabled:opacity-60"
+                  aria-label="إيقاف وإرسال"
+                  title="إيقاف وإرسال"
+                >
+                  <StopIcon />
                 </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && text.trim()) {
-                    onSend(text.trim());
-                    setText('');
-                  }
-                }}
-                placeholder="اكتب رسالة…"
-                className="flex-1 rounded-2xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none placeholder:text-ink-500"
-              />
-              <Button
-                variant="gold"
-                size="sm"
-                onClick={() => {
-                  if (text.trim()) {
-                    onSend(text.trim());
-                    setText('');
-                  }
-                }}
-              >
-                إرسال
-              </Button>
-            </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') sendText();
+                  }}
+                  placeholder="اكتب رسالة…"
+                  className="flex-1 rounded-2xl border border-white/12 bg-black/30 px-3 py-2 text-sm outline-none placeholder:text-ink-500"
+                />
+                <Button variant="gold" size="sm" onClick={sendText}>
+                  إرسال
+                </Button>
+                {onSendVoice && (
+                  <button
+                    onClick={() => void recorder.start()}
+                    disabled={sending}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white/10 text-gold-300 active:scale-90 disabled:opacity-50"
+                    aria-label="تسجيل رسالة صوتية"
+                    title="تسجيل رسالة صوتية"
+                  >
+                    <MicIcon />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

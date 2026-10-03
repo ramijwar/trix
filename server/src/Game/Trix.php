@@ -665,7 +665,6 @@ final class Trix
         $s['phase'] = 'game_end';
         $s['turnStartedAt'] = self::now();
         self::log($s, 'game_end', ['winner' => $bestSeat, 'scores' => (array) $s['scores']]);
-        self::chat($s, null, 'انتهت المباراة — فاز ' . (string) ($s['seats'][$bestSeat]['name'] ?? '') . ' 🏆');
     }
 
     public static function continueDeal(array &$s, int $seat): void
@@ -1078,19 +1077,26 @@ final class Trix
         }
     }
 
-    public static function chat(array &$s, ?int $seat, string $text, ?string $emoji = null): void
+    public static function chat(array &$s, ?int $seat, string $text, ?string $emoji = null, ?array $voice = null): void
     {
         $s['chatId'] = (int) ($s['chatId'] ?? 0) + 1;
-        $name = $seat === null ? 'النظام' : (string) ($s['seats'][$seat]['name'] ?? '');
-        $s['chat'][] = [
+        $name = $seat === null ? '—' : (string) ($s['seats'][$seat]['name'] ?? '');
+        $msg = [
             'id' => $s['chatId'],
             'seat' => $seat,
             'name' => $name,
             'text' => $text,
             'emoji' => $emoji,
             'at' => time(),
-            'system' => $seat === null,
         ];
+        if ($voice !== null && $seat !== null) {
+            $msg['text'] = '';
+            $msg['emoji'] = null;
+            $msg['voice'] = (string) ($voice['id'] ?? '');
+            $msg['dur'] = (int) ($voice['dur'] ?? 0);
+            $msg['mime'] = (string) ($voice['mime'] ?? 'audio/webm');
+        }
+        $s['chat'][] = $msg;
         if (count($s['chat']) > 80) {
             $s['chat'] = array_slice($s['chat'], -60);
         }

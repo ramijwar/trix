@@ -42,6 +42,7 @@ function OnlineRoom({ roomId }: { roomId: string }) {
       chooseContract: (contract) => void sessionRef.current?.chooseContract(contract),
       reveal: (card, done) => void sessionRef.current?.reveal(card, done),
       chat: (text, emoji) => void sessionRef.current?.chat(text, emoji),
+      voice: (blob, duration, mime) => void sessionRef.current?.voice(blob, duration, mime).catch((e: Error) => toast(e.message, 'error')),
       continueRound: () => void sessionRef.current?.continueRound(),
       ready: (r) => void sessionRef.current?.ready(r),
       start: () => void sessionRef.current?.startMatch(),

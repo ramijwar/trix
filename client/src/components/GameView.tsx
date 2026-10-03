@@ -19,6 +19,8 @@ export interface RoomActions {
   reveal?: (card?: string, done?: boolean) => void;
   play: (code: string) => void;
   chat: (text: string, emoji?: string) => void;
+  /** إرسال رسالة صوتية (أونلاين فقط) */
+  voice?: (blob: Blob, duration: number, mime: string) => void;
   continueRound: () => void;
   leave: () => void;
   ready?: (ready: boolean) => void;
@@ -122,7 +124,13 @@ export function GameView({
       <RoundSummary state={state} onContinue={() => actions.continueRound()} />
       <GameOver state={state} onExit={onExit} onRematch={() => actions.continueRound()} />
 
-      <ChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} state={state} onSend={(t, e) => actions.chat(t, e)} />
+      <ChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        state={state}
+        onSend={(t, e) => actions.chat(t, e)}
+        onSendVoice={actions.voice}
+      />
 
       <Modal open={menuOpen} onClose={() => setMenuOpen(false)} title="قائمة الطاولة">
         <div className="space-y-2">
@@ -154,6 +162,8 @@ export function WaitingRoom({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const toast = useStore((s) => s.toast);
   const me = state.seats[state.mySeat];
+  /** رسائل اللاعبين فقط (بلا رسائل نظام) */
+  const playerChat = (state.chat ?? []).filter((c) => c.seat !== null);
   const filled = state.seats.filter(Boolean).length;
   const freeSeats = state.seats.map((p, i) => (p === null && i !== state.mySeat ? i : -1)).filter((i) => i >= 0);
 
@@ -327,14 +337,14 @@ export function WaitingRoom({
           </Panel>
         )}
 
-        {state.chat.length > 0 && (
+        {playerChat.length > 0 && (
           <div className="mt-3">
             <SectionTitle icon={<span>💬</span>}>آخر الرسائل</SectionTitle>
             <Panel className="space-y-1 text-sm">
-              {state.chat.slice(-4).map((c) => (
+              {playerChat.slice(-4).map((c) => (
                 <div key={c.id} className="flex gap-2">
                   <span className="font-bold text-gold-300">{c.name}:</span>
-                  <span className="text-ink-100">{c.text}</span>
+                  <span className="text-ink-100">{c.voice ? '🎤 رسالة صوتية' : c.text}</span>
                 </div>
               ))}
             </Panel>
@@ -370,7 +380,13 @@ export function WaitingRoom({
         )}
       </div>
 
-      <ChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} state={state} onSend={(t, e) => actions.chat(t, e)} />
+      <ChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        state={state}
+        onSend={(t, e) => actions.chat(t, e)}
+        onSendVoice={actions.voice}
+      />
 
       <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="إعدادات الطاولة">
         <SettingsForm state={state} onSave={(s) => {

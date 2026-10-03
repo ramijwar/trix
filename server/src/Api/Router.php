@@ -82,6 +82,8 @@ final class Router
                 case 'room/rename': RoomApi::rename(); return;
                 case 'room/kick': RoomApi::kick(); return;
                 case 'room/chat': RoomApi::chat(); return;
+                case 'room/voice': RoomApi::voiceUpload(); return;
+                case 'voice/get': RoomApi::voiceFile(); return;
                 case 'room/continue': RoomApi::continueRound(); return;
 
                 // ============ اللعب ============
@@ -150,6 +152,7 @@ final class Router
             if (random_int(1, 20) === 1) {
                 Auth::prune();
                 Rooms::cleanup();
+                \Trix\Core\Voice::prune(86400);
             }
         } catch (\Throwable) {
             // نتجاهل أخطاء التنظيف
