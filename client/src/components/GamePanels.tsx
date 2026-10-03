@@ -432,16 +432,30 @@ export function ChatDrawer({
     setText('');
   };
 
+  const sendingRef = useRef(false);
   const finishRecording = async () => {
-    const clip = await recorder.stop();
-    if (!clip || !onSendVoice) return;
-    setSending(true);
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     try {
-      await onSendVoice(clip.blob, clip.duration, clip.mime);
+      const clip = await recorder.stop();
+      if (!clip || !onSendVoice) return;
+      setSending(true);
+      try {
+        await onSendVoice(clip.blob, clip.duration, clip.mime);
+      } finally {
+        setSending(false);
+      }
     } finally {
-      setSending(false);
+      sendingRef.current = false;
     }
   };
+
+  // بلوغ الحد الأقصى (٣٠ ثانية) يوقف التسجيل ويرسله تلقائياً
+  const reachedLimit = recorder.recording && recorder.seconds >= recorder.maxSeconds;
+  useEffect(() => {
+    if (reachedLimit) void finishRecording();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reachedLimit]);
 
   return (
     <>

@@ -76,10 +76,13 @@ export function useVoiceRecorder(maxSeconds = 30) {
       timerRef.current = window.setInterval(() => {
         const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
         setSeconds(elapsed);
-        if (elapsed >= maxSeconds) {
-          // الوصول للحد الأقصى: نُوقف تلقائياً ونُرسل ما سُجّل
+        if (elapsed > maxSeconds + 5) {
+          // حماية: لو بقي التسجيل مفتوحاً طويلاً بلا إيقاف (الشاشة في الخلفية مثلاً)
           const r = recorderRef.current;
-          if (r && r.state !== 'inactive') r.stop();
+          if (r && r.state !== 'inactive') {
+            cancelledRef.current = true;
+            r.stop();
+          }
         }
       }, 250);
       return true;
