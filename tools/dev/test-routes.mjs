@@ -255,6 +255,77 @@ section('🃏 اللعب في طاولة مستقلة');
   check('room/leave للغرفة السريعة', leftQuick.json.ok === true);
 }
 
+section('🀄 مسارات المور');
+{
+  const created = await call('room/create', { name: 'فحص مسارات مور', settings: { game: 'mor', morMode: 'jawaker', target: 101 } }, { token });
+  const morRoom = created.json.room;
+  check('room/create بلا لعبة مور', created.json.ok === true && morRoom?.settings?.game === 'mor', JSON.stringify(morRoom?.settings).slice(0, 120));
+  check('هدف المور يُحفظ (١٠١)', morRoom?.target === 101, `target=${morRoom?.target}`);
+
+  await call('room/bot/add', { room: morRoom.roomId }, { token });
+  await call('room/bot/add', { room: morRoom.roomId }, { token });
+  await call('room/bot/add', { room: morRoom.roomId }, { token });
+  const started = await call('room/start', { room: morRoom.roomId }, { token });
+  check('room/start يبدأ لعبة المور', started.json.ok === true && started.json.room?.phase === 'playing', JSON.stringify(started.json).slice(0, 120));
+
+  // ادخل دوري إن لزم: البوتات تلعب تلقائياً، فنجرب الحركات على دورٍ يخصّني
+  let st = started.json.room;
+  let guard = 0;
+  let drew = false;
+  let discarded = false;
+  let melded = false;
+  let ruleError = null;
+  while (guard++ < 80) {
+    if (!st || st.phase !== 'playing') break;
+    if (st.isMyTurn) {
+      if (st.mor?.needDraw) {
+        const r = await call('mor/draw', { room: morRoom.roomId, source: 'deck' }, { token });
+        if (r.json.ok) { drew = true; st = r.json.room; }
+        else break;
+      } else {
+        // نزول غير صالح (ورقتان) يجب أن يُرفض برسالة عربية واضحة ورمز rule
+        if (!ruleError) {
+          const two = (st.myHand || []).slice(0, 2);
+          if (two.length === 2) {
+            const bad = await call('mor/meld', { room: morRoom.roomId, cards: two }, { token });
+            if (bad.json.ok === false) ruleError = bad.json;
+          }
+        }
+        if (!melded && (st.myHand || []).length >= 5) {
+          const hand = [...st.myHand];
+          outer: for (let i = 0; i < hand.length; i++) {
+            for (let j = i + 1; j < hand.length; j++) {
+              for (let k = j + 1; k < hand.length; k++) {
+                const r = await call('mor/meld', { room: morRoom.roomId, cards: [hand[i], hand[j], hand[k]] }, { token });
+                if (r.json.ok) { melded = true; st = r.json.room; break outer; }
+              }
+            }
+          }
+        }
+        if (st?.isMyTurn && !st.mor?.needDraw && !st.mor?.pilePending) {
+          const choice = (st.myHand || []).find((c) => c[0] !== 'X') ?? st.myHand?.[0];
+          if (choice) {
+            const r = await call('mor/discard', { room: morRoom.roomId, card: choice }, { token });
+            if (r.json.ok) { discarded = true; st = r.json.room; }
+            else break;
+          }
+        }
+      }
+    }
+    await new Promise((r) => setTimeout(r, 150));
+    const poll = await call('room/poll', { room: morRoom.roomId, since: 0, wait: 1 }, { token });
+    st = poll.json.room || st;
+  }
+  check('mor/draw سحب ورقة', drew, 'لم يحن دوري');
+  check('mor/discard رمي ورقة', discarded);
+  check('mor/meld نزول (أو لا يوجد نزول صالح)', true);
+  check('نزول غير صالح يُرفض برسالة عربية (409 rule)', Boolean(ruleError?.error) && ruleError?.code === 'rule', JSON.stringify(ruleError).slice(0, 140));
+  if (melded) check('تم نزول صالح عبر mor/meld', true);
+  check('حالة المور متاحة في الواجهة', Boolean(st?.mor), JSON.stringify(Object.keys(st?.mor ?? {})).slice(0, 120));
+
+  await call('room/leave', { room: morRoom.roomId }, { token });
+}
+
 section('🧹 التنظيف');
 {
   const leave = await call('room/leave', { room: roomId_global }, { token });

@@ -93,6 +93,13 @@ final class Router
                 case 'game/contract': RoomApi::contract(); return;
                 case 'game/reveal': RoomApi::reveal(); return;
 
+                // ============ المور ============
+                case 'mor/draw': RoomApi::morDraw(); return;
+                case 'mor/meld': RoomApi::morMeld(); return;
+                case 'mor/add': RoomApi::morAdd(); return;
+                case 'mor/discard': RoomApi::morDiscard(); return;
+                case 'mor/take': RoomApi::morTakeMor(); return;
+
                 // ============ لوحة المدير ============
                 case 'admin/stats': AdminApi::stats(); return;
                 case 'admin/today': AdminApi::today(); return;

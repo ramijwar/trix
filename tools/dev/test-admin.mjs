@@ -184,5 +184,40 @@ const anyTable = (t?.matches || [])[0]?.roomCode;
 check('سجل اليوم يحتوي طاولة البطولة', (today.log?.rooms || []).some((r) => r.code === anyTable), String(anyTable));
 check('سجل اليوم يحتوي مباراة منتهية', (today.log?.matches || []).length > 0, String((today.log?.matches || []).length));
 
+console.log('\n🀄 بطولة مور:');
+token = admin.token;
+const morT = await api('admin/tournament/create', {
+  tournament: { name: 'بطولة مور', game: 'mor', capacity: 4, startAt: Math.floor(Date.now() / 1000) + 60 },
+});
+check('أُنشئت بطولة مور', morT.ok === true && morT.tournament?.game === 'mor', JSON.stringify(morT).slice(0, 140));
+const morTid = morT.tournament?.id;
+for (const p of players) {
+  token = p.token;
+  await api('tournament/join', { id: morTid });
+}
+token = admin.token;
+let morList = await api('admin/tournaments', {});
+let morRow = (morList.tournaments || []).find((x) => x.id === morTid);
+check('٤ مسجّلون في بطولة المور', morRow?.playersCount === 4, String(morRow?.playersCount));
+
+const morStart = await api('admin/tournament/start', { id: morTid });
+check('انطلقت بطولة المور', morStart.ok === true, JSON.stringify(morStart).slice(0, 140));
+morList = await api('admin/tournaments', {});
+morRow = (morList.tournaments || []).find((x) => x.id === morTid);
+const morMatch = (morRow?.matches || [])[0];
+check('أُنشئت طاولة مور واحدة', Boolean(morMatch?.roomCode), JSON.stringify(morMatch?.roomCode));
+if (morMatch?.roomCode) {
+  // نستخدم رمز أحد اللاعبين المشاركين في الطاولة (المدير ليس مقعداً فيها)
+  const seatToken = (players.find((p) => (morMatch.seats || []).some((s) => s.userId === p.id)) || players[0]).token;
+  token = seatToken;
+  const morState = await api('room/state', { room: morMatch.roomCode });
+  const room = morState.room || morState;
+  check('طاولة البطولة لعبة مور', room?.settings?.game === 'mor', JSON.stringify(room?.settings?.game));
+  check('هدف بطولة المور ٢٠١', Number(room?.target) === 201, String(room?.target));
+  check('طريقة الحساب جواكر', (room?.settings?.morMode ?? 'jawaker') === 'jawaker', JSON.stringify(room?.settings?.morMode));
+  check('المباراة بدأت (طور اللعب)', ['playing', 'round_end', 'game_end'].includes(String(room?.phase)), String(room?.phase));
+  check('حالة المور موجودة', Boolean(room?.mor), JSON.stringify(Object.keys(room?.mor ?? {})).slice(0, 100));
+}
+
 console.log(`\n✅ ناجح: ${pass}   ❌ فاشل: ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

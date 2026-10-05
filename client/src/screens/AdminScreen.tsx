@@ -192,7 +192,7 @@ export function AdminScreen() {
                 <div key={r.id} className="glass rounded-2xl px-3 py-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-bold">
-                      {r.game === 'trix' ? '🧩' : '🃏'} {r.name}
+                      {r.game === 'mor' ? '🀄' : r.game === 'trix' ? '🧩' : '🃏'} {r.name}
                     </span>
                     <span className="font-mono text-xs text-gold-300" dir="ltr">
                       {r.code}
@@ -365,7 +365,7 @@ export function TournamentCard({
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate text-sm font-black">
-            {t.game === 'trix' ? '🧩' : '🃏'} {t.name}
+            {t.game === 'mor' ? '🀄' : t.game === 'trix' ? '🧩' : '🃏'} {t.name}
           </div>
           <div className="text-[10px] text-ink-400">
             {STATUS_AR[t.status] ?? t.status} • {t.playersCount}/{t.capacity} مشارك
@@ -439,7 +439,7 @@ export function TournamentCard({
 function CreateTournament({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const toast = useStore((s) => s.toast);
   const [name, setName] = useState('بطولة التركس');
-  const [game, setGame] = useState<'tarnib' | 'trix'>('tarnib');
+  const [game, setGame] = useState<'tarnib' | 'trix' | 'mor'>('tarnib');
   const [capacity, setCapacity] = useState(8);
   const [minutes, setMinutes] = useState(10);
   const [busy, setBusy] = useState(false);
@@ -475,6 +475,7 @@ function CreateTournament({ open, onClose, onDone }: { open: boolean; onClose: (
             {([
               ['tarnib', '🃏 طرنيب'],
               ['trix', '🧩 تركس'],
+              ['mor', '🀄 مور'],
             ] as const).map(([k, label]) => (
               <button
                 key={k}

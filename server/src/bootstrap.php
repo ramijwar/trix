@@ -43,6 +43,7 @@ require_once __DIR__ . '/Core/Auth.php';
 require_once __DIR__ . '/Core/Voice.php';
 require_once __DIR__ . '/Core/Schema.php';
 require_once __DIR__ . '/Game/Engine.php';
+require_once __DIR__ . '/Game/Mor.php';
 require_once __DIR__ . '/Core/Rooms.php';
 require_once __DIR__ . '/Core/Users.php';
 require_once __DIR__ . '/Core/Tournaments.php';

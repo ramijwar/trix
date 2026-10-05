@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Trix\Core;
 
 use Trix\Game\Engine;
+use Trix\Game\Mor;
 use Trix\Game\Trix;
 
 /**
@@ -23,6 +24,7 @@ final class Rooms
             'game' => 'tarnib',
             'kingdoms' => 4,
             'target' => 31,
+            'morMode' => 'jawaker',
             'allowDouble' => false,
             'allowNoTrump' => false,
             'requireTrumpInHand' => false,
@@ -38,11 +40,23 @@ final class Rooms
         $out = array_merge(self::defaultSettings(), $base);
         if (isset($in['game'])) {
             $g = strtolower(trim((string) $in['game']));
-            $out['game'] = in_array($g, ['tarnib', 'trix'], true) ? $g : 'tarnib';
+            $out['game'] = in_array($g, ['tarnib', 'trix', 'mor'], true) ? $g : 'tarnib';
+        }
+        if (isset($in['morMode'])) {
+            $m = strtolower(trim((string) $in['morMode']));
+            $out['morMode'] = in_array($m, ['jawaker', 'popular'], true) ? $m : 'jawaker';
         }
         if (isset($in['target'])) {
             $t = (int) $in['target'];
-            $out['target'] = in_array($t, [31, 41, 61], true) ? $t : 31;
+            // لكل لعبة أهدافها المسموحة: الطرنيب ٣١/٤١/٦١، المور حسب الطريقة، والتركس لا هدف له
+            $allowed = self::allowedTargets((string) ($out['game'] ?? 'tarnib'), (string) ($out['morMode'] ?? 'jawaker'));
+            if (in_array($t, $allowed, true)) {
+                $out['target'] = $t;
+            } elseif (in_array((int) ($base['target'] ?? 0), $allowed, true)) {
+                $out['target'] = (int) $base['target']; // قيمة غير مسموحة → نُبقي هدف الطاولة الحالي
+            } else {
+                $out['target'] = $allowed[0];
+            }
         }
         if (isset($in['kingdoms'])) {
             $k = (int) $in['kingdoms'];
@@ -61,7 +75,24 @@ final class Rooms
             $t = (int) $in['bidTime'];
             $out['bidTime'] = in_array($t, [0, 10, 15, 20, 30, 45], true) ? $t : 30;
         }
+        // إن تغيّرت اللعبة أو طريقة الحساب وصار الهدف الحالي غير مسموح، نأخذ افتراضياً مناسباً
+        $allowed = self::allowedTargets((string) $out['game'], (string) $out['morMode']);
+        if (!in_array((int) $out['target'], $allowed, true)) {
+            $out['target'] = $allowed[0];
+        }
         return $out;
+    }
+
+    /** الأهداف المسموحة لكل لعبة (المور حسب طريقة الحساب) */
+    public static function allowedTargets(string $game, string $morMode = 'jawaker'): array
+    {
+        if ($game === 'mor') {
+            return $morMode === 'popular' ? [501, 1001, 1501] : [101, 151, 201];
+        }
+        if ($game === 'trix') {
+            return [31]; // التركس لا يُلعب على هدف
+        }
+        return [31, 41, 61];
     }
 
     /* ============================ الأساسيات ============================ */
@@ -195,9 +226,11 @@ final class Rooms
                 break;
             }
         }
+        $tGame = (string) ($tournament['game'] ?? 'tarnib');
         $settings = self::sanitizeSettings([
-            'game' => (string) ($tournament['game'] ?? 'tarnib'),
-            'target' => 31,
+            'game' => $tGame,
+            'target' => $tGame === 'mor' ? 201 : 31,
+            'morMode' => 'jawaker',
             'kingdoms' => 1,
             'allowDouble' => true,
             'turnTime' => 30,
@@ -819,9 +852,12 @@ final class Rooms
             }
             $settings = self::sanitizeSettings((array) ($state['settings'] ?? []));
             $dealer = random_int(0, 3);
-            $newState = ($settings['game'] ?? 'tarnib') === 'trix'
+            $game = (string) ($settings['game'] ?? 'tarnib');
+            $newState = $game === 'trix'
                 ? Trix::newMatch($seats, $settings, $dealer, (string) $r['code'], (string) $r['name'])
-                : Engine::newMatch($seats, $settings, $dealer, (string) $r['code'], (string) $r['name']);
+                : ($game === 'mor'
+                    ? Mor::newMatch($seats, $settings, $dealer, (string) $r['code'], (string) $r['name'])
+                    : Engine::newMatch($seats, $settings, $dealer, (string) $r['code'], (string) $r['name']));
             $newState['hostId'] = (int) $r['host_id'];
             $newState['swap'] = [];
             $newState['settings'] = $settings;
@@ -870,6 +906,41 @@ final class Rooms
             $seat = self::seatOf($state, (int) $user['id']);
             if ($seat === null) {
                 Http::fail('أنت لست في هذه الطاولة', 403);
+            }
+            // المور: تصويت على الدور التالي، وصاحب الغرفة يبدأ مباراة جديدة بعد النهاية
+            if (((($state['settings']['game'] ?? 'tarnib')) === 'mor')) {
+                if (($state['phase'] ?? '') === 'round_end') {
+                    Mor::continueRound($state, (int) $seat);
+                    return [];
+                }
+                if (($state['phase'] ?? '') === 'game_end') {
+                    if ((int) $r['host_id'] !== (int) $user['id']) {
+                        Http::fail('فقط صاحب الغرفة يبدأ مباراة جديدة', 403, 'not_host');
+                    }
+                    $settings = self::sanitizeSettings((array) ($state['settings'] ?? []), self::settings($r));
+                    $newState = Mor::newMatch(
+                        (array) $state['seats'],
+                        $settings,
+                        random_int(0, 3),
+                        (string) $r['code'],
+                        (string) $r['name']
+                    );
+                    $newState['hostId'] = (int) $r['host_id'];
+                    $newState['swap'] = [];
+                    $newState['settings'] = $settings;
+                    $newState['recorded'] = false;
+                    foreach ($newState['seats'] as $i => $pl) {
+                        if ($pl !== null) {
+                            $newState['seats'][$i]['ready'] = true;
+                        }
+                    }
+                    foreach ($newState as $k => $v) {
+                        $state[$k] = $v;
+                    }
+                    $r['status'] = 'playing';
+                    return [];
+                }
+                return [];
             }
             // نهاية المباراة: يبدأ صاحب الغرفة مباراة جديدة بنفس الطاولة
             if (((($state['settings']['game'] ?? 'tarnib')) === 'trix')) {
@@ -967,6 +1038,20 @@ final class Rooms
         $state['settings'] = $settings;
 
         if ($phase === 'waiting') {
+            return;
+        }
+
+        // لعبة المور لها منطقها الخاص
+        if (($settings['game'] ?? 'tarnib') === 'mor') {
+            if ($phase === 'game_end') {
+                if (empty($state['recorded'])) {
+                    self::recordMorMatch($room, $state);
+                    $state['recorded'] = true;
+                    $room['status'] = 'finished';
+                }
+                return;
+            }
+            Mor::tick($state);
             return;
         }
 
@@ -1115,6 +1200,39 @@ final class Rooms
         }
     }
 
+    /** تسجيل نتيجة مباراة المور (فريقان متقابلان) */
+    private static function recordMorMatch(array $room, array $state): void
+    {
+        $winner = (int) ($state['winnerTeam'] ?? 0);
+        $seats = (array) $state['seats'];
+        $scores = [(int) ($state['scores'][0] ?? 0), (int) ($state['scores'][1] ?? 0)];
+        $ids = [];
+        $names = [];
+        foreach ($seats as $pl) {
+            $ids[] = $pl === null ? 0 : (int) $pl['userId'];
+            $names[] = $pl === null ? '-' : (string) $pl['name'];
+        }
+        Db::insert('matches', [
+            'room_code' => (string) $room['code'],
+            'target' => (int) ($state['settings']['target'] ?? 0),
+            'score_a' => $scores[0],
+            'score_b' => $scores[1],
+            'winner_team' => $winner,
+            'rounds' => max(1, (int) ($state['roundNo'] ?? 1) - 1),
+            'player_ids' => json_encode($ids),
+            'names' => json_encode($names, JSON_UNESCAPED_UNICODE),
+            'duration' => max(1, time() - (int) ($state['createdAt'] ?? time())),
+            'created_at' => time(),
+        ]);
+        foreach ($seats as $i => $pl) {
+            if ($pl === null || !empty($pl['isBot']) || (int) $pl['userId'] <= 0) {
+                continue;
+            }
+            $isWinner = ((int) $i % 2) === $winner;
+            Users::recordResult((int) $pl['userId'], $isWinner, false, max(1, (int) ($state['roundNo'] ?? 1) - 1));
+        }
+    }
+
     /* ============================ العرض ============================ */
 
     /** حالة الغرفة كما يراها لاعب معيّن */
@@ -1126,8 +1244,10 @@ final class Rooms
         if ($phase === 'waiting' || $seat === null) {
             $view = self::waitingView($room, $state, $userId, $seat);
         } else {
-            $isTrix = ((($state['settings']['game'] ?? 'tarnib')) === 'trix');
-            $view = $isTrix ? Trix::publicView($state, $seat) : Engine::publicView($state, $seat);
+            $gameKind = (string) (($state['settings']['game'] ?? 'tarnib'));
+            $view = $gameKind === 'trix'
+                ? Trix::publicView($state, $seat)
+                : ($gameKind === 'mor' ? Mor::publicView($state, $seat) : Engine::publicView($state, $seat));
             $view['roomId'] = (string) $room['id'];
             $view['roomCode'] = (string) $room['code'];
             $view['roomName'] = (string) $room['name'];

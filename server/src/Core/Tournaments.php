@@ -104,7 +104,7 @@ final class Tournaments
             Http::fail('اسم البطولة مطلوب', 422, 'name_required');
         }
         $game = (string) ($in['game'] ?? 'tarnib');
-        if (!in_array($game, ['tarnib', 'trix'], true)) {
+        if (!in_array($game, ['tarnib', 'trix', 'mor'], true)) {
             $game = 'tarnib';
         }
         $capacity = (int) ($in['capacity'] ?? 8);
@@ -433,7 +433,26 @@ final class Tournaments
                 }
                 // الترتيب من النتيجة النهائية
                 $scores = $state['scores'] ?? [];
-                if (!is_array($scores) || count($scores) < 4) {
+                if (!is_array($scores)) {
+                    continue;
+                }
+                $tGame = (string) ($state['settings']['game'] ?? 'tarnib');
+                if ($tGame === 'mor') {
+                    // المور: فريقان متقابلان (المقاعد 0/2 ثم 1/3) — الفائز بفريقه
+                    if (count($scores) < 2) {
+                        continue;
+                    }
+                    $winnerTeam = ((int) $scores[0] >= (int) $scores[1]) ? 0 : 1;
+                    Db::exec('UPDATE tournament_matches SET status = ?, winner_seat = ?, runner_seat = ? WHERE id = ?', [
+                        'done',
+                        $winnerTeam,
+                        1 - $winnerTeam,
+                        (int) $m['id'],
+                    ]);
+                    $changed = true;
+                    continue;
+                }
+                if (count($scores) < 4) {
                     continue;
                 }
                 $order = [0, 1, 2, 3];

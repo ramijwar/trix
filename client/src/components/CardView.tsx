@@ -25,6 +25,7 @@ interface Props {
 
 export function CardView({ code, size = 'md', faceDown, back = 'red', dim, glow, className, onClick, layoutId, style }: Props) {
   const s = SIZES[size];
+  const joker = code.startsWith('X');
   const suit = cardSuit(code);
   const rank = cardRank(code);
   const red = isRedCard(code);
@@ -44,14 +45,19 @@ export function CardView({ code, size = 'md', faceDown, back = 'red', dim, glow,
         className,
       )}
     >
-      {!faceDown && (
+      {!faceDown && joker && (
+        <div className={cn('absolute inset-0 flex flex-col items-center justify-center font-black text-amber-500', s.center)}>
+          <span>🃏</span>
+        </div>
+      )}
+      {!faceDown && !joker && (
         <>
           <div className={cn('absolute top-0.5 right-1 flex flex-col items-center leading-none font-bold', s.corner)}>
             <span>{rank}</span>
             <span>{SUIT_SYMBOL[suit]}</span>
           </div>
           <div className={cn('absolute inset-0 flex items-center justify-center font-black opacity-90', s.center)}>
-            {SUIT_SYMBOL[suit]}
+            {joker ? '★' : SUIT_SYMBOL[suit]}
           </div>
           <div className={cn('absolute bottom-0.5 left-1 rotate-180 flex flex-col items-center leading-none font-bold', s.corner)}>
             <span>{rank}</span>

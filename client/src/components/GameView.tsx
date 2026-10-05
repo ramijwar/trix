@@ -5,6 +5,7 @@ import { Avatar, Button, EmptyState, Modal, Panel, SectionTitle } from './ui';
 import { GameTable } from './GameTable';
 import { BidPanel, ChatDrawer, GameOver, RoundSummary, ScoreBar } from './GamePanels';
 import { TrixView } from './TrixView';
+import { MorView } from './MorView';
 import { useGameSounds } from '../hooks/useGameSounds';
 import { useStore } from '../lib/store';
 import { keepScreenOn } from '../lib/native';
@@ -21,6 +22,12 @@ export interface RoomActions {
   chat: (text: string, emoji?: string) => void;
   /** إرسال رسالة صوتية (أونلاين فقط) */
   voice?: (blob: Blob, duration: number, mime: string) => void;
+  /* ===== لعبة المور ===== */
+  morDraw?: (source: 'deck' | 'pile') => void;
+  morMeld?: (cards: string[]) => void;
+  morAdd?: (meldId: number, cards: string[]) => void;
+  morDiscard?: (card: string) => void;
+  morTakeMor?: () => void;
   continueRound: () => void;
   leave: () => void;
   ready?: (ready: boolean) => void;
@@ -66,6 +73,7 @@ export function GameView({
   const [menuOpen, setMenuOpen] = useState(false);
   const [shake, setShake] = useState(false);
   const isTrix = state.game === 'trix' || state.settings?.game === 'trix';
+  const isMor = state.game === 'mor' || state.settings?.game === 'mor';
   useGameSounds(state, state.mySeat);
 
   useEffect(() => {
@@ -85,6 +93,9 @@ export function GameView({
   // لعبة التركس لها واجهتها الخاصة (تسميات، مجموعات، تدبيل)
   if (isTrix) {
     return <TrixView state={state} actions={actions} status={status} onExit={onExit} />;
+  }
+  if (isMor) {
+    return <MorView state={state} actions={actions} status={status} onExit={onExit} />;
   }
 
   return (
@@ -177,8 +188,9 @@ export function WaitingRoom({
 
   /** زر الدعوة: رسالة كاملة للمشاركة مع الأصدقاء */
   const invite = async () => {
-    const gameName = state.settings?.game === 'trix' ? 'التركس' : 'الطرنيب';
-    await shareText(`انضم إليّ في طاولة ${gameName}! رمز الغرفة: ${state.roomCode}`, 'طرنيب وتركس أونلاين');
+    const g = state.settings?.game;
+    const gameName = g === 'trix' ? 'التركس' : g === 'mor' ? 'المور' : 'الطرنيب';
+    await shareText(`انضم إليّ في طاولة ${gameName}! رمز الغرفة: ${state.roomCode}`, 'طرنيب وتركس ومور أونلاين');
   };
 
   const seatLabel = (seat: number) => {
@@ -195,13 +207,19 @@ export function WaitingRoom({
         <div className="text-center">
           <div className="text-sm font-black">
             {state.roomName || 'طاولة'}{' '}
-            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-black', state.settings?.game === 'trix' ? 'bg-emerald-600/60' : 'bg-sky-600/60')}>
-              {state.settings?.game === 'trix' ? 'تركس 🧩' : 'طرنيب 🃏'}
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[10px] font-black',
+                state.settings?.game === 'trix' ? 'bg-emerald-600/60' : state.settings?.game === 'mor' ? 'bg-fuchsia-700/60' : 'bg-sky-600/60',
+              )}
+            >
+              {state.settings?.game === 'trix' ? 'تركس 🧩' : state.settings?.game === 'mor' ? 'مور 🀄' : 'طرنيب 🃏'}
             </span>
           </div>
           <div className="text-[11px] text-ink-300">
             {filled}/4 لاعبين •{' '}
             {state.settings?.game === 'trix' ? `${state.settings?.kingdoms ?? 4} ممالك` : `هدف ${state.target}`}
+            {state.settings?.game === 'mor' && <span> • {state.settings?.morMode === 'popular' ? 'الطريقة الشعبية' : 'طريقة جواكر'}</span>}
           </div>
         </div>
         <button onClick={() => setChatOpen(true)} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
@@ -230,20 +248,34 @@ export function WaitingRoom({
         </Panel>
 
         {/* نوع اللعبة */}
-        <Panel className={cn('mb-3 border', state.settings?.game === 'trix' ? 'border-emerald-500/30' : 'border-sky-500/30')}>
+        <Panel
+          className={cn(
+            'mb-3 border',
+            state.settings?.game === 'trix' ? 'border-emerald-500/30' : state.settings?.game === 'mor' ? 'border-fuchsia-500/30' : 'border-sky-500/30',
+          )}
+        >
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-sm font-black">
-                {state.settings?.game === 'trix' ? '🧩 تركس' : '🃏 طرنيب'}
+                {state.settings?.game === 'trix' ? '🧩 تركس' : state.settings?.game === 'mor' ? '🀄 مور' : '🃏 طرنيب'}
               </div>
+              {state.settings?.game === 'mor' && (
+                <div className="text-[11px] text-ink-400">
+                  {state.settings?.morMode === 'popular' ? 'الطريقة الشعبية' : 'طريقة جواكر'} • فريقان متقابلان • هدف {state.target}
+                </div>
+              )}
             </div>
             {state.isHost ? (
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => actions.saveSettings?.({ game: state.settings?.game === 'trix' ? 'tarnib' : 'trix' })}
+                onClick={() => {
+                  const cur = state.settings?.game;
+                  const next = cur === 'tarnib' ? 'trix' : cur === 'trix' ? 'mor' : 'tarnib';
+                  actions.saveSettings?.({ game: next });
+                }}
               >
-                تبديل إلى {state.settings?.game === 'trix' ? 'طرنيب' : 'تركس'}
+                تبديل إلى {state.settings?.game === 'tarnib' ? 'تركس' : state.settings?.game === 'trix' ? 'مور' : 'طرنيب'}
               </Button>
             ) : null}
           </div>

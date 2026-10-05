@@ -8,6 +8,7 @@ use Trix\Core\Http;
 use Trix\Core\Rooms;
 use Trix\Core\Voice;
 use Trix\Game\Engine;
+use Trix\Game\Mor;
 use Trix\Game\Trix;
 
 /** مسارات الغرف واللعب */
@@ -21,6 +22,103 @@ final class RoomApi
             return;
         }
         Engine::chat($state, $seat, $text, $emoji, $voice);
+    }
+
+    /** يتحقق أن الطاولة تلعب المور ويعيد رقم مقعد اللاعب */
+    private static function morSeat(array $state, int $userId): int
+    {
+        if (((string) ($state['settings']['game'] ?? 'tarnib')) !== 'mor') {
+            Http::fail('هذه الطاولة ليست لعبة مور', 409, 'not_mor');
+        }
+        $seat = Rooms::seatOf($state, $userId);
+        if ($seat === null) {
+            Http::fail('أنت لست في هذه الطاولة', 403);
+        }
+        return $seat;
+    }
+
+    /* ============================ المور ============================ */
+
+    /**
+     * تنفيذ حركة مور داخل الغرفة، مع تحويل أخطاء القوانين إلى ردّ ٤٠٩
+     * برسالة عربية واضحة بدل «حدث خطأ في الخادم» (مثل: اسحب ورقة أولاً).
+     */
+    private static function morAct(string $roomId, int $userId, callable $fn): array
+    {
+        try {
+            return Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $fn) {
+                $seat = self::morSeat($state, $userId);
+                $fn($state, $seat);
+                return [];
+            });
+        } catch (\RuntimeException $e) {
+            Http::fail($e->getMessage(), 409, 'rule');
+        }
+    }
+
+    /** سحب ورقة (من الرزمة أو كومة الرمي) */
+    public static function morDraw(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $source = Http::str('source', 'deck') === 'pile' ? 'pile' : 'deck';
+        $userId = (int) $user['id'];
+        $result = self::morAct($roomId, $userId, function (array &$state, int $seat) use ($source) {
+            Mor::applyDraw($state, $seat, $source);
+        });
+        Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
+    }
+
+    /** نزول مجموعة أوراق من اليد */
+    public static function morMeld(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $cards = (array) (Http::input('cards', []) ?? []);
+        $userId = (int) $user['id'];
+        $result = self::morAct($roomId, $userId, function (array &$state, int $seat) use ($cards) {
+            Mor::applyMeld($state, $seat, $cards);
+        });
+        Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
+    }
+
+    /** إضافة أوراق إلى نزول قائم لفريقك */
+    public static function morAdd(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $meldId = Http::int('meld', 0);
+        $cards = (array) (Http::input('cards', []) ?? []);
+        $userId = (int) $user['id'];
+        $result = self::morAct($roomId, $userId, function (array &$state, int $seat) use ($meldId, $cards) {
+            Mor::applyAdd($state, $seat, $meldId, $cards);
+        });
+        Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
+    }
+
+    /** رمي ورقة */
+    public static function morDiscard(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $card = Http::str('card');
+        $userId = (int) $user['id'];
+        $result = self::morAct($roomId, $userId, function (array &$state, int $seat) use ($card) {
+            Mor::applyDiscard($state, $seat, $card);
+        });
+        Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
+    }
+
+    /** أخذ كومة المور عندما تنهي أوراقك */
+    public static function morTakeMor(): void
+    {
+        $user = Auth::requireUser();
+        $roomId = Http::str('room');
+        $userId = (int) $user['id'];
+        $result = self::morAct($roomId, $userId, function (array &$state, int $seat) {
+            Mor::takeMor($state, $seat);
+        });
+        Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
     }
 
     /** إرجاع حالة الغرفة كما يراها المستخدم الحالي */

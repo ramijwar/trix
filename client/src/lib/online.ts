@@ -188,6 +188,27 @@ export class RoomSession {
     await this.act('room/voice', { room: this.roomId, audio, dur: Math.max(1, Math.round(duration)), mime });
   }
 
+  /* ===== المور ===== */
+  morDraw(source: 'deck' | 'pile'): Promise<void> {
+    return this.act('mor/draw', { source });
+  }
+
+  morMeld(cards: string[]): Promise<void> {
+    return this.act('mor/meld', { cards });
+  }
+
+  morAdd(meld: number, cards: string[]): Promise<void> {
+    return this.act('mor/add', { meld, cards });
+  }
+
+  morDiscard(card: string): Promise<void> {
+    return this.act('mor/discard', { card });
+  }
+
+  morTakeMor(): Promise<void> {
+    return this.act('mor/take', {});
+  }
+
   ready(ready: boolean): Promise<void> {
     return this.act('room/ready', { ready });
   }

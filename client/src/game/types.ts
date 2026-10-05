@@ -137,7 +137,9 @@ export interface PlayedTrick {
   winner: number | null;
 }
 
-export type GameKind = 'tarnib' | 'trix';
+import type { MorState } from './mor';
+
+export type GameKind = 'tarnib' | 'trix' | 'mor';
 
 export interface RoomSettings {
   /** نوع اللعبة: طرنيب (شراكة) أو تركس (فردية) */
@@ -145,7 +147,7 @@ export interface RoomSettings {
   /** عدد الممالك في التركس: 1 (سريعة) أو 2 أو 4 (كاملة) */
   kingdoms: 1 | 2 | 4;
   /** النقاط المطلوبة للفوز */
-  target: 31 | 41 | 61;
+  target: number;
   /** السماح بالمضاعفة (دبل) من الفريق الخصم */
   allowDouble: boolean;
   /** السماح بطلبة "بدون طرنيب" */
@@ -160,6 +162,8 @@ export interface RoomSettings {
   quickPlay: boolean;
   /** صوت اللعبة مفعّل */
   sound: boolean;
+  /** طريقة حساب المور: جواكر أو الشعبية */
+  morMode?: 'jawaker' | 'popular';
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -506,6 +510,8 @@ export interface TableState {
 
 /** حالة الغرفة كما يرسلها الخادم */
 export interface RoomState extends TableState {
+  /** حالة لعبة المور (إن كانت الغرفة تلعب المور) */
+  mor?: MorState | null;
   version: number;
   roomId: string;
   roomCode: string;

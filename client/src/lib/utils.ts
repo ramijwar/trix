@@ -14,6 +14,7 @@ export function suitColor(s: Suit): string {
 }
 
 export function cardRank(code: string): string {
+  if (code.startsWith('X')) return '🃏';
   const c = parseCard(code);
   return RANK_LABEL[c.r] ?? String(c.r);
 }
@@ -23,6 +24,7 @@ export function cardSuit(code: string): Suit {
 }
 
 export function isRedCard(code: string): boolean {
+  if (code.startsWith('X')) return false;
   const s = cardSuit(code);
   return s === 'H' || s === 'D';
 }
@@ -75,7 +77,7 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /** مشاركة نص: مشاركة النظام إن توفّرت، وإلا النسخ للحافظة */
-export async function shareText(text: string, title = 'طرنيب وتركس أونلاين'): Promise<boolean> {
+export async function shareText(text: string, title = 'طرنيب وتركس ومور أونلاين'): Promise<boolean> {
   try {
     if (navigator.share) {
       await navigator.share({ text, title });

@@ -390,7 +390,7 @@ export function TrixView({
 
       <Modal open={menuOpen} onClose={() => setMenuOpen(false)} title="قائمة الطاولة">
         <div className="space-y-2">
-          <Button variant="ghost" full onClick={() => void shareText(`انضم إليّ في طاولة التركس! رمز الغرفة: ${state.roomCode}`, 'طرنيب وتركس أونلاين')}>
+          <Button variant="ghost" full onClick={() => void shareText(`انضم إليّ في طاولة التركس! رمز الغرفة: ${state.roomCode}`, 'طرنيب وتركس ومور أونلاين')}>
             📤 دعوة صديق (مشاركة الرمز)
           </Button>
           <div className="rounded-2xl bg-black/25 p-3 text-xs leading-relaxed text-ink-300">

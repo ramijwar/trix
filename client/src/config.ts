@@ -20,5 +20,5 @@ const ANDROID_SERVER = (import.meta.env.VITE_TRIX_SERVER as string | undefined)?
 export const BUILT_IN_SERVER = import.meta.env.MODE === 'android' ? ANDROID_SERVER : '';
 
 /** اسم اللعبة الظاهر */
-export const APP_NAME = 'طرنيب وتركس أونلاين';
+export const APP_NAME = 'طرنيب وتركس ومور أونلاين';
 export const APP_VERSION = '1.0.0';
