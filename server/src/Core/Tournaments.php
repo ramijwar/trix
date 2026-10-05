@@ -504,6 +504,16 @@ final class Tournaments
         );
         $matches = Db::all('SELECT * FROM matches WHERE created_at >= ? ORDER BY created_at DESC LIMIT 200', [$since]);
 
+        // نوع اللعبة لكل مباراة (يُستخرج من إعدادات الغرفة بنفس الرمز)
+        $gameByCode = [];
+        foreach ($rooms as $r) {
+            $st = json_decode((string) $r['settings'], true);
+            $gameByCode[(string) $r['code']] = (string) (is_array($st) ? ($st['game'] ?? 'tarnib') : 'tarnib');
+        }
+        foreach ($matches as $i => $m) {
+            $matches[$i]['game'] = $gameByCode[(string) $m['room_code']] ?? 'tarnib';
+        }
+
         $userIds = [];
         foreach ($rooms as $r) {
             foreach (['seat0', 'seat1', 'seat2', 'seat3'] as $s) {
@@ -566,6 +576,7 @@ final class Tournaments
             'matches' => array_map(static fn(array $m): array => [
                 'id' => (int) $m['id'],
                 'roomCode' => (string) $m['room_code'],
+                'game' => (string) ($m['game'] ?? 'tarnib'),
                 'scoreA' => (int) $m['score_a'],
                 'scoreB' => (int) $m['score_b'],
                 'winnerTeam' => (int) $m['winner_team'],

@@ -183,6 +183,11 @@ today = await api('admin/today', {});
 const anyTable = (t?.matches || [])[0]?.roomCode;
 check('سجل اليوم يحتوي طاولة البطولة', (today.log?.rooms || []).some((r) => r.code === anyTable), String(anyTable));
 check('سجل اليوم يحتوي مباراة منتهية', (today.log?.matches || []).length > 0, String((today.log?.matches || []).length));
+check(
+  'سجل المباريات يبيّن نوع اللعبة',
+  (today.log?.matches || []).every((m) => ['tarnib', 'trix', 'mor'].includes(String(m.game ?? ''))),
+  JSON.stringify((today.log?.matches || []).slice(0, 2).map((m) => m.game)),
+);
 
 console.log('\n🀄 بطولة مور:');
 token = admin.token;

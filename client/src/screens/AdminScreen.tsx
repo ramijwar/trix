@@ -39,6 +39,7 @@ interface TodayRoom {
 interface TodayMatch {
   id: number;
   roomCode: string;
+  game?: string;
   scoreA: number;
   scoreB: number;
   winnerTeam: number;
@@ -220,6 +221,9 @@ export function AdminScreen() {
                 <div key={m.id} className="glass flex items-center justify-between rounded-2xl px-3 py-2 text-xs">
                   <span className="font-mono text-ink-300" dir="ltr">
                     {m.roomCode}
+                  </span>
+                  <span className="text-[10px] font-bold">
+                    {m.game === 'mor' ? '🀄 مور' : m.game === 'trix' ? '🧩 تركس' : '🃏 طرنيب'}
                   </span>
                   <span className="font-bold">
                     {m.scoreA} — {m.scoreB}
