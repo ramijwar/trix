@@ -105,6 +105,23 @@ export function LobbyScreen() {
       .catch(() => setDailyReady(false));
   }, []);
 
+  /** فتح طاولة: انضمام للعب (أو مشاهدة تلقائياً إن كانت ممتلئة) */
+  const openRoom = async (r: RoomListItem, watch = false) => {
+    setBusy(`${watch ? 'w' : 'o'}:${r.id}`);
+    try {
+      const res = await api<{ room: { roomId: string; roomCode: string; isSpectator?: boolean } }>(
+        watch ? 'room/watch' : 'room/join',
+        { room: r.code },
+      );
+      if (res.room?.isSpectator) toast('الطاولة ممتلئة — دخلت كمشاهد 👁', 'success');
+      enterRoom(res.room.roomId, res.room.roomCode);
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const startOffline = () => {
     const match = new OfflineMatch({
       playerName: user?.name ?? 'لاعب',
@@ -223,9 +240,8 @@ export function LobbyScreen() {
         )}
         <div className="space-y-2">
           {rooms.map((r) => (
-            <button
+            <div
               key={r.id}
-              onClick={() => enterRoom(r.id, r.code)}
               className="glass flex w-full items-center gap-3 rounded-2xl p-3 text-right transition active:scale-[.99]"
             >
               <div className={cn('flex size-11 items-center justify-center rounded-2xl text-xl', r.status === 'playing' ? 'bg-rose-500/20' : 'bg-emerald-500/20')}>
@@ -240,6 +256,7 @@ export function LobbyScreen() {
                   <span>
                     {r.players}/4 لاعبين
                     {r.humans > 0 && ` • ${r.humans} حقيقي`}
+                    {(r.spectators ?? 0) > 0 && ` • 👁 ${r.spectators} مشاهد`}
                   </span>
                   <span>•</span>
                   <span className={cn(r.game === 'mor' ? 'text-fuchsia-300' : r.game === 'trix' ? 'text-emerald-300' : 'text-sky-300')}>
@@ -257,8 +274,26 @@ export function LobbyScreen() {
                   )}
                 </div>
               </div>
-              <div className="text-[10px] text-ink-500">{timeAgo(Math.max(0, Math.floor(Date.now() / 1000) - r.updatedAt))}</div>
-            </button>
+              <div className="flex shrink-0 flex-col items-stretch gap-1">
+                <button
+                  onClick={() => void openRoom(r)}
+                  disabled={busy === `o:${r.id}`}
+                  className="rounded-xl bg-gold-500/90 px-2.5 py-1 text-[11px] font-black text-felt-950 disabled:opacity-60"
+                >
+                  {r.players >= 4 ? '👁 مشاهدة' : '🎮 انضمام'}
+                </button>
+                <button
+                  onClick={() => void openRoom(r, true)}
+                  disabled={busy === `w:${r.id}`}
+                  className="rounded-xl bg-white/10 px-2.5 py-1 text-[10px] font-bold text-ink-200 disabled:opacity-60"
+                >
+                  👁 مشاهدة فقط
+                </button>
+                <span className="text-center text-[9px] text-ink-500">
+                  {timeAgo(Math.max(0, Math.floor(Date.now() / 1000) - r.updatedAt))}
+                </span>
+              </div>
+            </div>
           ))}
         </div>
       </div>

@@ -15,13 +15,37 @@ use Trix\Game\Trix;
 final class RoomApi
 {
     /** إضافة رسالة دردشة إلى محرّك اللعبة المناسب للغرفة */
-    private static function addChat(array &$state, ?int $seat, string $text, ?string $emoji = null, ?array $voice = null): void
-    {
+    private static function addChat(
+        array &$state,
+        ?int $seat,
+        string $text,
+        ?string $emoji = null,
+        ?array $voice = null,
+        ?string $name = null,
+    ): void {
         if (((string) ($state['settings']['game'] ?? 'tarnib')) === 'trix') {
-            Trix::chat($state, $seat, $text, $emoji, $voice);
+            Trix::chat($state, $seat, $text, $emoji, $voice, $name);
             return;
         }
-        Engine::chat($state, $seat, $text, $emoji, $voice);
+        Engine::chat($state, $seat, $text, $emoji, $voice, $name);
+    }
+
+    /**
+     * من يحقّ له الكتابة في دردشة الطاولة: اللاعبون في المقاعد والمشاهدون المسجّلون.
+     * @return array{0:?int,1:?string} المقعد (أو null للمشاهد) والاسم المعروض
+     */
+    private static function chatIdentity(array $state, array $user): array
+    {
+        $userId = (int) $user['id'];
+        $seat = Rooms::seatOf($state, $userId);
+        if ($seat !== null) {
+            return [$seat, null];
+        }
+        if (Rooms::isSpectator($state, $userId)) {
+            $name = trim((string) $user['display_name']);
+            return [null, $name !== '' ? $name : 'مشاهد'];
+        }
+        Http::fail('أنت لست في هذه الطاولة', 403);
     }
 
     /** يتحقق أن الطاولة تلعب المور ويعيد رقم مقعد اللاعب */
@@ -173,8 +197,8 @@ final class RoomApi
         // نمرّ على الدوران أيضاً حتى تتقدّم البوتات والمؤقتات مع أي قراءة للحالة
         $result = Rooms::act(
             Http::str('room'),
-            static function (array &$r, array &$state) use ($userId): array {
-                Rooms::heartbeat($state, $userId);
+            static function (array &$r, array &$state) use ($userId, $user): array {
+                Rooms::heartbeat($state, $userId, (string) ($user['display_name'] ?? ''), (string) ($user['avatar'] ?? ''));
                 return [];
             }
         );
@@ -185,13 +209,35 @@ final class RoomApi
     public static function poll(): void
     {
         $user = Auth::requireUser();
-        $view = Rooms::poll(
+        $result = Rooms::poll(
             Http::str('room'),
             $user,
             Http::int('since', 0),
-            Http::int('wait', 20)
+            Http::int('wait', 20),
+            Http::bool('watch', false)
         );
-        Http::ok(['room' => $view]);
+        if (!empty($result['unchanged'])) {
+            // لا جديد: رد صغير جداً يوفّر بيانات الشبكة ويُبقي الاتصال حياً
+            Http::ok([
+                'unchanged' => true,
+                'room' => null,
+                'version' => (int) $result['version'],
+                'serverTime' => $result['serverTime'],
+            ]);
+        }
+        Http::ok(['room' => $result['view'], 'version' => (int) $result['version'], 'serverTime' => $result['serverTime']]);
+    }
+
+    /** الدخول كمشاهد (بلا مقعد) لمتابعة اللعب والدردشة */
+    public static function watch(): void
+    {
+        $user = Auth::requireUser();
+        $code = Http::str('room');
+        if ($code === '') {
+            $code = Http::str('code');
+        }
+        $room = Rooms::watch($user, $code, Http::str('password'));
+        Http::ok(['room' => self::viewOf($room, (int) $user['id'])]);
     }
 
     public static function seat(): void
@@ -290,12 +336,9 @@ final class RoomApi
             Http::fail('الرسالة فارغة', 422);
         }
         $userId = (int) $user['id'];
-        $result = Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $text, $emoji) {
-            $seat = Rooms::seatOf($state, $userId);
-            if ($seat === null) {
-                Http::fail('أنت لست في هذه الطاولة', 403);
-            }
-            self::addChat($state, $seat, $text, $emoji !== '' ? $emoji : null);
+        $result = Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $user, $text, $emoji) {
+            [$seat, $name] = self::chatIdentity($state, $user);
+            self::addChat($state, $seat, $text, $emoji !== '' ? $emoji : null, null, $name);
             return [];
         });
         Http::ok(['room' => Rooms::view($result['_room'], $result['_state'], $userId)]);
@@ -316,12 +359,9 @@ final class RoomApi
         }
         $saved = Voice::save($audio, Http::str('mime', 'audio/webm'), $duration);
         $userId = (int) $user['id'];
-        $result = Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $saved) {
-            $seat = Rooms::seatOf($state, $userId);
-            if ($seat === null) {
-                Http::fail('أنت لست في هذه الطاولة', 403);
-            }
-            self::addChat($state, $seat, '', null, $saved);
+        $result = Rooms::act($roomId, function (array &$r, array &$state) use ($userId, $user, $saved) {
+            [$seat, $name] = self::chatIdentity($state, $user);
+            self::addChat($state, $seat, '', null, $saved, $name);
             return [];
         });
         Http::ok([
@@ -343,7 +383,8 @@ final class RoomApi
         if ($roomId !== '') {
             $room = Rooms::requireRoom($roomId);
             $state = Rooms::decode($room);
-            if (Rooms::seatOf($state, (int) $user['id']) === null) {
+            $uid = (int) $user['id'];
+            if (Rooms::seatOf($state, $uid) === null && !Rooms::isSpectator($state, $uid)) {
                 Http::fail('أنت لست في هذه الطاولة', 403);
             }
         }

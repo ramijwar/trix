@@ -75,10 +75,16 @@ function OnlineRoom({ roomId }: { roomId: string }) {
     );
   }
 
+  /** زر التحديث: يقطع الاستعلام الطويل ويجلب الحالة الآن (مفيد عند ضعف الشبكة) */
+  const refresh = () => {
+    void sessionRef.current?.refresh().catch(() => toast('تعذّر التحديث — تحقّق من الشبكة', 'error'));
+  };
+
+  // المشاهد أيضاً يرى طاولة اللعب (بلا أوراق وبلا أزرار) بدل غرفة الانتظار
   const inGame = state.phase !== 'waiting';
   return inGame ? (
-    <GameView state={state} actions={actions} status={status} onExit={actions.leave} />
+    <GameView state={state} actions={actions} status={status} onExit={actions.leave} onRefresh={refresh} />
   ) : (
-    <WaitingRoom state={state} actions={actions} onExit={actions.leave} />
+    <WaitingRoom state={state} actions={actions} status={status} onExit={actions.leave} onRefresh={refresh} />
   );
 }

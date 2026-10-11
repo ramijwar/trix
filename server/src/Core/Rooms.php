@@ -493,10 +493,8 @@ final class Rooms
             }
             $free = self::preferredSeats($state);
             if (!$free) {
-                // الغرفة ممتلئة
-                if ((string) $r['status'] === 'waiting') {
-                    Http::fail('الغرفة ممتلئة', 409, 'room_full');
-                }
+                // الغرفة ممتلئة: من يدخل لاحقاً يشاهد
+                self::touchSpectator($state, $user);
                 return ['seat' => null, 'spectator' => true];
             }
             $target = $free[0];
@@ -526,6 +524,14 @@ final class Rooms
         self::act((string) $room['id'], function (array &$r, array &$state) use ($user) {
             $seat = self::seatOf($state, (int) $user['id']);
             if ($seat === null) {
+                // مشاهد: نكتفي بإزالته من قائمة المشاهدين
+                $keep = [];
+                foreach ((array) ($state['spectators'] ?? []) as $sp) {
+                    if ((int) ($sp['userId'] ?? 0) !== (int) $user['id']) {
+                        $keep[] = $sp;
+                    }
+                }
+                $state['spectators'] = array_values($keep);
                 return [];
             }
             $phase = (string) ($state['phase'] ?? 'waiting');
@@ -594,7 +600,35 @@ final class Rooms
             }
             $mySeat = self::seatOf($state, (int) $user['id']);
             if ($mySeat === null) {
-                Http::fail('أنت لست في هذه الطاولة', 403);
+                // مشاهد يريد الجلوس في مقعد فارغ (قبل بدء المباراة فقط)
+                if (!self::isSpectator($state, (int) $user['id'])) {
+                    Http::fail('أنت لست في هذه الطاولة', 403);
+                }
+                if (($state['seats'][$seat] ?? null) !== null) {
+                    Http::fail('المقعد مشغول، أرسل طلب تبديل', 409, 'seat_taken');
+                }
+                $state['seats'][$seat] = [
+                    'userId' => (int) $user['id'],
+                    'name' => (string) $user['display_name'],
+                    'avatar' => (string) $user['avatar'],
+                    'level' => (int) $user['level'],
+                    'isBot' => false,
+                    'connected' => true,
+                    'ready' => false,
+                    'seat' => $seat,
+                    'team' => $seat % 2,
+                    'lastSeen' => Engine::now(),
+                    'botSkills' => self::skillFor((int) $user['level']),
+                ];
+                $keep = [];
+                foreach ((array) ($state['spectators'] ?? []) as $sp) {
+                    if ((int) ($sp['userId'] ?? 0) !== (int) $user['id']) {
+                        $keep[] = $sp;
+                    }
+                }
+                $state['spectators'] = array_values($keep);
+                Engine::log($state, 'join', ['seat' => $seat, 'name' => (string) $user['display_name']]);
+                return [];
             }
             if ($mySeat === $seat) {
                 return [];
@@ -1233,6 +1267,115 @@ final class Rooms
         }
     }
 
+    /* ============================ المشاهدون ============================ */
+
+    /** الحد الأعلى لعدد المشاهدين المسجّلين في الطاولة الواحدة */
+    public const SPECTATOR_LIMIT = 40;
+
+    /** مدة اعتبار المشاهد حاضراً (أطول من اللاعب لأن استعلامه طويل) */
+    public const SPECTATOR_TIMEOUT = 90;
+
+    /** هل المستخدم مشاهد مسجّل في هذه الطاولة؟ */
+    public static function isSpectator(array $state, int $userId): bool
+    {
+        foreach ((array) ($state['spectators'] ?? []) as $sp) {
+            if ((int) ($sp['userId'] ?? 0) === $userId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** قائمة المشاهدين الحاضرين الآن */
+    public static function spectatorsList(array $state): array
+    {
+        $now = Engine::now();
+        $out = [];
+        foreach ((array) ($state['spectators'] ?? []) as $sp) {
+            if ($now - (float) ($sp['lastSeen'] ?? 0) > self::SPECTATOR_TIMEOUT) {
+                continue;
+            }
+            $out[] = [
+                'userId' => (int) ($sp['userId'] ?? 0),
+                'name' => (string) ($sp['name'] ?? 'مشاهد'),
+                'avatar' => (string) ($sp['avatar'] ?? '👤'),
+            ];
+        }
+        return $out;
+    }
+
+    /** تسجيل حضور مشاهد (يُحدَّث آخر ظهوره بلا إثقال الطاولة) */
+    private static function touchSpectator(array &$state, array $user): void
+    {
+        $userId = (int) $user['id'];
+        $list = [];
+        $found = false;
+        foreach ((array) ($state['spectators'] ?? []) as $sp) {
+            if ((int) ($sp['userId'] ?? 0) === $userId) {
+                $sp['name'] = (string) $user['display_name'];
+                $sp['avatar'] = (string) $user['avatar'];
+                $sp['lastSeen'] = Engine::now();
+                $found = true;
+            }
+            $list[] = $sp;
+        }
+        if (!$found) {
+            $list[] = [
+                'userId' => $userId,
+                'name' => (string) $user['display_name'],
+                'avatar' => (string) $user['avatar'],
+                'joinedAt' => Engine::now(),
+                'lastSeen' => Engine::now(),
+            ];
+        }
+        if (count($list) > self::SPECTATOR_LIMIT) {
+            usort($list, static fn(array $a, array $b): int => (int) ($a['lastSeen'] ?? 0) <=> (int) ($b['lastSeen'] ?? 0));
+            $list = array_slice($list, -self::SPECTATOR_LIMIT);
+        }
+        $state['spectators'] = array_values($list);
+    }
+
+    /** حذف المشاهدين المنقطعين حتى لا يبقى عدد وهمي */
+    private static function pruneSpectators(array &$state): void
+    {
+        $all = (array) ($state['spectators'] ?? []);
+        if ($all === []) {
+            return;
+        }
+        $now = Engine::now();
+        $keep = [];
+        foreach ($all as $sp) {
+            if ($now - (float) ($sp['lastSeen'] ?? 0) <= self::SPECTATOR_TIMEOUT) {
+                $keep[] = $sp;
+            }
+        }
+        if (count($keep) !== count($all)) {
+            $state['spectators'] = array_values($keep);
+        }
+    }
+
+    /** دخول الطاولة كمشاهد: يشاهد اللعب ويشارك الدردشة بلا مقعد */
+    public static function watch(array $user, string $idOrCode, string $password = ''): array
+    {
+        $room = self::requireRoom($idOrCode);
+        if ((string) $room['status'] === 'closed') {
+            Http::fail('الغرفة مغلقة', 410, 'room_closed');
+        }
+        $hash = (string) ($room['password'] ?? '');
+        if ($hash !== '' && !password_verify($password, $hash)) {
+            Http::fail('كلمة مرور الغرفة غير صحيحة', 403, 'bad_room_password');
+        }
+        self::act((string) $room['id'], function (array &$r, array &$state) use ($user) {
+            $seat = self::seatOf($state, (int) $user['id']);
+            if ($seat !== null) {
+                return ['seat' => $seat, 'player' => true];
+            }
+            self::touchSpectator($state, $user);
+            return ['seat' => null, 'spectator' => true];
+        });
+        return self::requireRoom((string) $room['id']);
+    }
+
     /* ============================ العرض ============================ */
 
     /** حالة الغرفة كما يراها لاعب معيّن */
@@ -1241,7 +1384,10 @@ final class Rooms
         $seat = self::seatOf($state, $userId);
         $phase = (string) ($state['phase'] ?? 'waiting');
 
-        if ($phase === 'waiting' || $seat === null) {
+        if ($phase !== 'waiting' && $seat === null && self::isSpectator($state, $userId)) {
+            // مشاهد مسجّل: يرى الطاولة كاملة بلا أي أوراق خاصة
+            $view = self::spectatorGameView($room, $state);
+        } elseif ($phase === 'waiting' || $seat === null) {
             $view = self::waitingView($room, $state, $userId, $seat);
         } else {
             $gameKind = (string) (($state['settings']['game'] ?? 'tarnib'));
@@ -1259,6 +1405,55 @@ final class Rooms
             $view['swapRequests'] = array_values(array_filter((array) ($state['swap'] ?? []), static fn($s) => (int) $s['to'] === $seat));
             $view['allReady'] = self::allReady($state);
         }
+        // عدد المشاهدين يظهر لكل من في الطاولة (لاعبين ومشاهدين)
+        $watchers = self::spectatorsList($state);
+        $view['spectators'] = ['count' => count($watchers), 'list' => array_slice($watchers, 0, 24)];
+        $view['isSpectator'] = $seat === null;
+        return $view;
+    }
+
+    /** عرض الطاولة لمشاهد: كل ما هو عام فقط — بلا أوراق أو أزرار خاصة بمقعد */
+    private static function spectatorGameView(array $room, array $state): array
+    {
+        $gameKind = (string) ($state['settings']['game'] ?? 'tarnib');
+        // نبني العرض من مقعد وهمي ثم نمحو كل ما يخصّ مقعداً بعينه
+        $view = $gameKind === 'trix'
+            ? Trix::publicView($state, 0)
+            : ($gameKind === 'mor' ? Mor::publicView($state, 0) : Engine::publicView($state, 0));
+        $view['myHand'] = [];
+        $view['mySeat'] = -1;
+        $view['myTeam'] = -1;
+        $view['isMyTurn'] = false;
+        $view['legalCards'] = [];
+        $view['legalBids'] = [];
+        $view['canPass'] = false;
+        $view['canDouble'] = false;
+        $view['mustChooseTrump'] = false;
+        $view['wonTrick'] = false;
+        if (isset($view['mor']) && is_array($view['mor'])) {
+            $view['mor']['canTakePile'] = false;
+            $view['mor']['canTakeMor'] = false;
+            $view['mor']['canCloseNow'] = false;
+            $view['mor']['pileCards'] = [];
+            $view['mor']['pilePending'] = false;
+        }
+        if (isset($view['trix']) && is_array($view['trix'])) {
+            $view['trix']['canReveal'] = [];
+            $view['trix']['revealReady'] = false;
+            $view['trix']['mustChooseContract'] = false;
+            $view['trix']['legalContracts'] = [];
+            $view['trix']['taken'] = [];
+        }
+        $view['roomId'] = (string) $room['id'];
+        $view['roomCode'] = (string) $room['code'];
+        $view['roomName'] = (string) $room['name'];
+        $view['hostId'] = (int) $room['host_id'];
+        $view['status'] = (string) $room['status'];
+        $view['isHost'] = false;
+        $view['isSpectator'] = true;
+        $view['settings'] = (array) ($state['settings'] ?? self::settings($room));
+        $view['swapRequests'] = [];
+        $view['allReady'] = self::allReady($state);
         return $view;
     }
 
@@ -1302,6 +1497,10 @@ final class Rooms
             'round' => (int) ($state['round'] ?? 0),
             'log' => array_slice((array) ($state['log'] ?? []), -40),
             'chat' => array_slice((array) ($state['chat'] ?? []), -60),
+            'spectators' => (static function (array $st): array {
+                $all = self::spectatorsList($st);
+                return ['count' => count($all), 'list' => array_slice($all, 0, 24)];
+            })($state),
             'swapRequests' => $seat === null ? [] : array_values(array_filter((array) ($state['swap'] ?? []), static fn($s) => (int) $s['to'] === $seat)),
             'allReady' => self::allReady($state),
             'myHand' => [],
@@ -1344,9 +1543,27 @@ final class Rooms
     }
 
     /** تحديث آخر ظهور للاعب (بدون تغيير رقم النسخة إلا عند تغيّر حالة الاتصال) */
-    public static function heartbeat(array &$state, int $userId): bool
+    public static function heartbeat(array &$state, int $userId, string $name = '', string $avatar = ''): bool
     {
         $changed = false;
+        // المشاهدون: تحديث الحضور (بلا تغيير رقم النسخة) وإزالة المنقطعين
+        self::pruneSpectators($state);
+        if (self::isSpectator($state, $userId)) {
+            $list = [];
+            foreach ((array) ($state['spectators'] ?? []) as $sp) {
+                if ((int) ($sp['userId'] ?? 0) === $userId) {
+                    $sp['lastSeen'] = Engine::now();
+                    if ($name !== '') {
+                        $sp['name'] = $name;
+                    }
+                    if ($avatar !== '') {
+                        $sp['avatar'] = $avatar;
+                    }
+                }
+                $list[] = $sp;
+            }
+            $state['spectators'] = array_values($list);
+        }
         foreach ($state['seats'] as $i => $pl) {
             if ($pl === null) {
                 continue;
@@ -1404,6 +1621,7 @@ final class Rooms
                 'target' => (int) (($state['settings']['target'] ?? self::settings($row)['target'])),
                 'round' => (int) ($state['round'] ?? 0),
                 'scores' => [(int) ($state['scores'][0] ?? 0), (int) ($state['scores'][1] ?? 0)],
+                'spectators' => count(self::spectatorsList($state)),
                 'hasPassword' => $row['password'] !== '',
                 'updatedAt' => (int) $row['last_activity'],
             ];
@@ -1412,18 +1630,24 @@ final class Rooms
     }
 
     /** الاستعلام الطويل (Long Polling) لمزامنة الطاولة */
-    public static function poll(string $idOrCode, array $user, int $since, int $waitSeconds): array
+    public static function poll(string $idOrCode, array $user, int $since, int $waitSeconds, bool $keepWatching = false): array
     {
         $maxWait = min(max(1, $waitSeconds), (int) Config::get('poll_wait', 25));
-        $deadline = microtime(true) + $maxWait;
+        $startedAt = microtime(true);
+        $deadline = $startedAt + $maxWait;
+        $elapsed = 0.0;
         $room = self::requireRoom($idOrCode);
         $roomId = (string) $room['id'];
         $userId = (int) $user['id'];
         $result = null;
 
         do {
-            $result = self::act($roomId, function (array &$r, array &$state) use ($userId, $since, &$changedOut) {
-                $changed = self::heartbeat($state, $userId);
+            $result = self::act($roomId, function (array &$r, array &$state) use ($user, $userId, $since, $keepWatching, &$changedOut) {
+                // مشاهد انقطع طويلاً ثم عاد: نُعيد تسجيله بلا طلب جديد
+                if ($keepWatching && self::seatOf($state, $userId) === null && !self::isSpectator($state, $userId)) {
+                    self::touchSpectator($state, $user);
+                }
+                $changed = self::heartbeat($state, $userId, (string) ($user['display_name'] ?? ''), (string) ($user['avatar'] ?? ''));
                 self::tick($r, $state);
                 $changed = $changed || ((int) ($state['version'] ?? 0) > $since);
                 $changedOut = $changed;
@@ -1432,15 +1656,25 @@ final class Rooms
             if (!empty($result['changed'])) {
                 break;
             }
-            usleep(180000); // 0.18 ثانية — استجابة أسرع للحركات
+            // أول ٤ ثوانٍ: نبض سريع للحركات، بعدها نُبطئ قليلاً لتخفيف الحمل على الاستضافة
+            $elapsed = microtime(true) - $startedAt;
+            usleep($elapsed < 4.0 ? 180000 : 300000);
         } while (microtime(true) < $deadline);
 
         $fresh = self::requireRoom($roomId);
         $state = self::decode($fresh);
+        $version = (int) ($state['version'] ?? 0);
+        if ($version <= $since) {
+            /*
+             * لا جديد: نُرسل رداً صغيراً جداً (لا الحالة كاملة) —
+             * توفير كبير في البيانات على الشبكات الضعيفة مع بقاء الاتصال حياً.
+             */
+            return ['unchanged' => true, 'version' => $version, 'serverTime' => Engine::now(), 'view' => null];
+        }
         $view = self::view($fresh, $state, $userId);
-        $view['changed'] = (int) ($state['version'] ?? 0) > $since;
+        $view['changed'] = true;
         $view['serverTime'] = Engine::now();
-        return $view;
+        return ['unchanged' => false, 'version' => $version, 'serverTime' => Engine::now(), 'view' => $view];
     }
 
     /** تغيير الاسم/الخصوصية للغرفة */

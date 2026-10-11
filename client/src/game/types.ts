@@ -266,6 +266,8 @@ export interface ChatMessage {
   /** مدة الرسالة الصوتية بالثواني */
   dur?: number | null;
   mime?: string | null;
+  /** رسالة من مشاهد (ليست رسالة نظام) */
+  spectator?: boolean;
 }
 
 /** ============================ أدوات الورق ============================ */
@@ -457,6 +459,8 @@ export interface WireChat {
   /** مدة الرسالة الصوتية بالثواني */
   dur?: number | null;
   mime?: string | null;
+  /** رسالة من مشاهد (ليست رسالة نظام) */
+  spectator?: boolean;
 }
 
 export interface SwapRequest {
@@ -520,6 +524,8 @@ export interface RoomState extends TableState {
   isHost: boolean;
   status: string;
   isSpectator: boolean;
+  /** المشاهدون في الطاولة (يظهر عددهم للاعبين) */
+  spectators?: { count: number; list: { userId: number; name: string; avatar: string }[] };
   swapRequests: SwapRequest[];
   allReady: boolean;
 }
@@ -540,6 +546,8 @@ export interface RoomListItem {
   round: number;
   scores: [number, number];
   hasPassword: boolean;
+  /** عدد المشاهدين في الطاولة */
+  spectators?: number;
   updatedAt: number;
 }
 

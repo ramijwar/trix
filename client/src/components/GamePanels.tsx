@@ -163,7 +163,16 @@ export function BidPanel({
 }
 
 /* ============================ ملخص الجولة ============================ */
-export function RoundSummary({ state, onContinue }: { state: RoomState; onContinue: () => void }) {
+export function RoundSummary({
+  state,
+  onContinue,
+  readOnly = false,
+}: {
+  state: RoomState;
+  onContinue: () => void;
+  /** وضع المشاهدة: بلا أزرار تفاعل */
+  readOnly?: boolean;
+}) {
   // ملخص الجولة خاص بالطرنيب — التركس له ملخصه داخل TrixView
   const s = state.lastRoundSummary as RoundSummaryData | null;
   const show = state.phase === 'round_end' && Boolean(s);
@@ -223,18 +232,35 @@ export function RoundSummary({ state, onContinue }: { state: RoomState; onContin
           <span className="text-ink-300">الهدف {state.target}</span>
         </div>
 
-        <Button variant="gold" full onClick={onContinue}>
-          الجولة التالية ({left})
-        </Button>
+        {readOnly ? (
+          <div className="w-full rounded-2xl bg-white/5 py-2 text-center text-xs text-ink-300">
+            👁 بانتظار جاهزية اللاعبين… ({left})
+          </div>
+        ) : (
+          <Button variant="gold" full onClick={onContinue}>
+            الجولة التالية ({left})
+          </Button>
+        )}
       </div>
     </Modal>
   );
 }
 
 /* ============================ نهاية المباراة ============================ */
-export function GameOver({ state, onExit, onRematch }: { state: RoomState; onExit: () => void; onRematch: () => void }) {
+export function GameOver({
+  state,
+  onExit,
+  onRematch,
+  readOnly = false,
+}: {
+  state: RoomState;
+  onExit: () => void;
+  onRematch: () => void;
+  /** وضع المشاهدة: بلا زر مباراة جديدة */
+  readOnly?: boolean;
+}) {
   const user = useStore((st) => st.user);
-  const won = state.winnerTeam === state.myTeam;
+  const won = !readOnly && state.winnerTeam === state.myTeam;
   const show = state.phase === 'game_end';
   const [a, b] = state.scores;
   return (
@@ -262,10 +288,12 @@ export function GameOver({ state, onExit, onRematch }: { state: RoomState; onExi
           عدد الجولات: {Math.max(1, state.round - 1)}
           {user && <div className="mt-1">رصيدك: 🪙 {user.coins} • مستوى {user.level}</div>}
         </div>
-        <div className="grid w-full grid-cols-2 gap-2">
-          <Button variant="gold" onClick={onRematch}>
-            مباراة جديدة
-          </Button>
+        <div className={cn('grid w-full gap-2', readOnly ? 'grid-cols-1' : 'grid-cols-2')}>
+          {!readOnly && (
+            <Button variant="gold" onClick={onRematch}>
+              مباراة جديدة
+            </Button>
+          )}
           <Button variant="dark" onClick={onExit}>
             الخروج للردهة
           </Button>
@@ -412,8 +440,11 @@ export function ChatDrawer({
   const recorder = useVoiceRecorder(30);
   const endRef = useRef<HTMLDivElement | null>(null);
   const roomKey = String(state.roomId ?? state.roomCode ?? '');
-  // رسائل اللاعبين فقط — بلا رسائل نظام ولا عبارات جاهزة، دردشة نظيفة
-  const messages = useMemo(() => (state.chat ?? []).filter((m) => m.seat !== null).slice(-60), [state.chat]);
+  // رسائل اللاعبين والمشاهدين فقط — بلا رسائل نظام ولا عبارات جاهزة، دردشة نظيفة
+  const messages = useMemo(
+    () => (state.chat ?? []).filter((m) => m.seat !== null || m.spectator === true).slice(-60),
+    [state.chat],
+  );
 
   useEffect(() => {
     if (open) endRef.current?.scrollIntoView({ block: 'end' });
@@ -470,10 +501,25 @@ export function ChatDrawer({
               </button>
             </div>
 
+            {(state.spectators?.count ?? 0) > 0 && (
+              <div className="mb-2 rounded-2xl bg-black/30 px-3 py-2">
+                <div className="text-[11px] font-bold text-sky-200">
+                  👁 المشاهدون ({state.spectators?.count})
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {(state.spectators?.list ?? []).map((sp) => (
+                    <span key={sp.userId} className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">
+                      {sp.avatar} {sp.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mb-2 flex-1 overflow-y-auto rounded-2xl bg-black/25 p-2">
               {messages.length === 0 && <div className="py-6 text-center text-sm text-ink-300">لا رسائل بعد</div>}
               {messages.map((m) => {
-                const mine = m.seat === state.mySeat;
+                const mine = m.seat !== null && m.seat === state.mySeat;
                 const hasVoice = Boolean(m.voice);
                 return (
                   <div key={m.id} className={cn('mb-1.5 flex', mine ? 'justify-start' : 'justify-end')}>
@@ -484,7 +530,11 @@ export function ChatDrawer({
                         hasVoice && 'min-w-[190px]',
                       )}
                     >
-                      {!mine && <div className="text-[10px] text-ink-300">{m.name}</div>}
+                      {!mine && (
+                        <div className="text-[10px] text-ink-300">
+                          {m.spectator ? `👁 ${m.name}` : m.name}
+                        </div>
+                      )}
                       {hasVoice ? (
                         <VoicePlayer
                           id={String(m.voice)}

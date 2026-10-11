@@ -1,7 +1,9 @@
 /**
  * إدارة جلسة الغرفة أونلاين:
  * - استعلام طويل (Long Polling) للحصول على تحديثات فورية بأقل استهلاك
- * - إعادة اتصال تلقائية مع تراجع تدريجي عند انقطاع الشبكة
+ * - ردود صغيرة عند عدم وجود جديد (توفير بيانات كبير على الشبكات الضعيفة)
+ * - إعادة اتصال تلقائية مع تراجع تدريجي عشوائي (jitter) عند الانقطاع
+ * - إعادة محاولة الإجراءات تلقائياً عند فشل الشبكة + زر تحديث يدوي فوري
  * - تحديثات متفائلة للواجهة (تظهر ورقتك فوراً قبل تأكيد الخادم)
  */
 import { api, ApiError } from './api';
@@ -18,9 +20,19 @@ export class RoomSession {
   onState?: (s: RoomState) => void;
   onStatus?: (s: ConnectionStatus) => void;
   onError?: (message: string) => void;
+  /** آخر وقت من الخادم (لتصحيح الساعات المنحرفة) */
+  lastServerTime = 0;
+  /** زمن آخر استجابة بالمللي ثانية (لبيان جودة الشبكة) */
+  latency = 0;
   private running = false;
   private failures = 0;
   private abort: AbortController | null = null;
+  /** إيقاف ناعم للاستعلام الطويل بفعل زر التحديث */
+  private softAbort = false;
+  /** وضع المشاهدة: يُرسل مع الاستعلام حتى يبقى المشاهد مسجّلاً بعد انقطاع طويل */
+  watchMode = false;
+  private onOnline?: () => void;
+  private onOffline?: () => void;
 
   constructor(roomId: string, initial?: RoomState) {
     this.roomId = roomId;
@@ -42,16 +54,56 @@ export class RoomSession {
   connect(): void {
     if (this.running) return;
     this.running = true;
+    // استعادة الاتصال تلقائياً عند عودة الشبكة (وإظهار الانقطاع فوراً عند فقدها)
+    if (typeof window !== 'undefined') {
+      this.onOnline = () => void this.refresh();
+      this.onOffline = () => this.setStatus('offline');
+      window.addEventListener('online', this.onOnline);
+      window.addEventListener('offline', this.onOffline);
+    }
     void this.loop();
   }
 
   stop(): void {
     this.running = false;
+    this.softAbort = true;
     this.abort?.abort();
+    if (typeof window !== 'undefined') {
+      if (this.onOnline) window.removeEventListener('online', this.onOnline);
+      if (this.onOffline) window.removeEventListener('offline', this.onOffline);
+      this.onOnline = undefined;
+      this.onOffline = undefined;
+    }
+  }
+
+  /**
+   * تحديث فوري (زر «تحديث» في الطاولة): يقطع الاستعلام الطويل ويجلب الحالة الآن.
+   * مفيد عند انقطاع الاتصال أو تجمّد الشاشة.
+   */
+  async refresh(): Promise<void> {
+    this.softAbort = true;
+    this.abort?.abort();
+    this.failures = 0;
+    this.setStatus('connecting');
+    try {
+      const started = Date.now();
+      const res = await api<{ room: RoomState }>('room/state', { room: this.roomId }, { timeout: 15000 });
+      this.latency = Date.now() - started;
+      // زر التحديث يُصلح حالة المشاهد أيضاً إن كان قد انقطع طويلاً
+      if (res.room?.isSpectator && res.room.status !== 'waiting' && res.room.phase === 'waiting') {
+        await api('room/watch', { room: this.roomId }).catch(() => undefined);
+      }
+      this.apply(res.room);
+      this.setStatus('online');
+    } catch (e) {
+      this.setStatus('offline');
+      throw e;
+    }
   }
 
   private apply(room: RoomState): void {
     const prev = this.state;
+    if (room.isSpectator) this.watchMode = true;
     this.state = room;
     if (!prev || prev.version !== room.version || JSON.stringify(prev) !== JSON.stringify(room)) {
       this.emit();
@@ -62,19 +114,41 @@ export class RoomSession {
   private async loop(): Promise<void> {
     while (this.running) {
       try {
+        this.abort = new AbortController();
         const since = this.state?.version ?? 0;
-        const res = await api<{ room: RoomState }>(
+        // الشبكة الضعيفة: ننتظر أقل حتى لا نتعلّق طويلاً بلا فائدة
+        const wait = this.failures > 0 ? 12 : 22;
+        const started = Date.now();
+        const res = await api<{ room: RoomState | null; unchanged?: boolean; version?: number; serverTime?: number }>(
           'room/poll',
-          { room: this.roomId, since, wait: 20 },
-          { timeout: 34000 },
+          { room: this.roomId, since, wait, watch: this.watchMode },
+          { timeout: wait * 1000 + 14000 },
         );
+        this.latency = Date.now() - started;
+        if (typeof res.serverTime === 'number' && res.serverTime > 0) this.lastServerTime = res.serverTime;
         this.failures = 0;
         this.setStatus('online');
-        this.apply(res.room);
+        if (res.room) {
+          this.apply(res.room);
+          /*
+           * لو كان المشاهد مسجّلاً ثم طال انقطاعه فأُزيل من القائمة، يعود الخادم بعرض
+           * «غرفة الانتظار» بينما الطاولة تلعب — هنا نُعيد تسجيل المشاهدة فوراً.
+           */
+          if (res.room.isSpectator && res.room.status !== 'waiting' && res.room.phase === 'waiting') {
+            void api('room/watch', { room: this.roomId }).catch(() => undefined);
+          }
+        }
+        // رد صغير (لا جديد): لا إعادة رسم ولا بيانات — نُكمل الاستعلام فوراً
       } catch (e) {
         if (!this.running) return;
+        if (this.softAbort) {
+          // إيقاف مقصود من زر التحديث — نُكمل بلا عدّ فشل
+          this.softAbort = false;
+          await new Promise((r) => setTimeout(r, 120));
+          continue;
+        }
         const err = e as ApiError;
-        if (err.status === 404 || err.code === 'room_not_found') {
+        if (err.status === 404 || err.code === 'room_not_found' || err.code === 'room_closed') {
           this.onError?.('انتهت الغرفة أو أُغلقت');
           this.stop();
           return;
@@ -82,10 +156,27 @@ export class RoomSession {
         this.failures++;
         if (this.failures === 1) this.onError?.(err.message);
         this.setStatus(this.failures > 2 ? 'offline' : 'connecting');
-        const wait = Math.min(6000, 700 * this.failures);
-        await new Promise((r) => setTimeout(r, wait));
+        // تراجع تدريجي مع عشوائية (jitter) لتفادي تصادم المحاولات
+        const base = Math.min(8000, 600 * this.failures);
+        await new Promise((r) => setTimeout(r, Math.round(base * (0.8 + Math.random() * 0.5))));
       }
     }
+  }
+
+  /** إرسال طلب مع إعادة محاولة تلقائية عند فشل الشبكة فقط */
+  private async send<T>(route: string, body: Record<string, unknown>, timeout = 20000): Promise<T> {
+    let last: unknown = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await api<T>(route, body, { timeout });
+      } catch (e) {
+        last = e;
+        const err = e as ApiError;
+        if (err.status !== 0 || !this.running) throw e; // خطأ منطقي أو جلسة متوقفة: لا نعيد
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1) + Math.random() * 300));
+      }
+    }
+    throw last as Error;
   }
 
   /** استدعاء إجراء وإرجاع الحالة المحدّثة */
@@ -95,8 +186,12 @@ export class RoomSession {
       this.emit();
     }
     try {
-      const res = await api<{ room: RoomState }>(route, { room: this.roomId, ...body }, { timeout: 20000 });
-      this.apply(res.room);
+      const res = await this.send<{ room: RoomState | null }>(route, { room: this.roomId, ...body }, 20000);
+      if (res.room) {
+        this.apply(res.room);
+      }
+      this.failures = 0;
+      this.setStatus('online');
     } catch (e) {
       const err = e as ApiError;
       this.onError?.(err.message);
@@ -104,8 +199,9 @@ export class RoomSession {
       try {
         const res = await api<{ room: RoomState }>('room/state', { room: this.roomId }, { timeout: 15000 });
         this.apply(res.room);
+        this.setStatus('online');
       } catch {
-        /* تجاهل */
+        this.setStatus('offline');
       }
     }
   }
@@ -252,6 +348,11 @@ export class RoomSession {
   leave(): Promise<void> {
     this.stop();
     return api('room/leave', { room: this.roomId }).then(() => undefined).catch(() => undefined);
+  }
+
+  /** هل أنا مشاهد (بلا مقعد)؟ */
+  get isSpectator(): boolean {
+    return this.state?.isSpectator === true;
   }
 }
 

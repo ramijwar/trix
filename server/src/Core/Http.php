@@ -51,13 +51,33 @@ final class Http
             $GLOBALS['__trix_response'] = ['code' => $code, 'data' => $data];
             throw new HttpExit('response');
         }
+        $payload = (string) json_encode(
+            $data,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR
+        );
         if (!headers_sent()) {
             http_response_code($code);
             header('Content-Type: application/json; charset=utf-8');
             header('Cache-Control: no-store, no-cache, must-revalidate');
             header('X-Content-Type-Options: nosniff');
+            /*
+             * ضغط الاستجابة (gzip) — الشبكات الضعيفة تنقل ~٢٠٪ من الحجم فقط.
+             * المتصفح يفكّ الضغط تلقائياً، والطلبات الصغيرة تبقى بلا ضغط.
+             */
+            $accepts = (string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '');
+            if (strlen($payload) >= 700
+                && stripos($accepts, 'gzip') !== false
+                && function_exists('gzencode')
+                && !ini_get('zlib.output_compression')) {
+                $gz = gzencode($payload, 6);
+                if (is_string($gz) && $gz !== '') {
+                    header('Content-Encoding: gzip');
+                    header('Vary: Accept-Encoding');
+                    $payload = $gz;
+                }
+            }
         }
-        echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        echo $payload;
         exit;
     }
 

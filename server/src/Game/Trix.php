@@ -1077,10 +1077,10 @@ final class Trix
         }
     }
 
-    public static function chat(array &$s, ?int $seat, string $text, ?string $emoji = null, ?array $voice = null): void
+    public static function chat(array &$s, ?int $seat, string $text, ?string $emoji = null, ?array $voice = null, ?string $who = null): void
     {
         $s['chatId'] = (int) ($s['chatId'] ?? 0) + 1;
-        $name = $seat === null ? '—' : (string) ($s['seats'][$seat]['name'] ?? '');
+        $name = $seat === null ? ($who ?? '—') : (string) ($s['seats'][$seat]['name'] ?? '');
         $msg = [
             'id' => $s['chatId'],
             'seat' => $seat,
@@ -1089,7 +1089,11 @@ final class Trix
             'emoji' => $emoji,
             'at' => time(),
         ];
-        if ($voice !== null && $seat !== null) {
+        if ($who !== null) {
+            // رسالة من مشاهد: نُعلّمها ليعرضها العميل في الدردشة (وليست رسالة نظام)
+            $msg['spectator'] = true;
+        }
+        if ($voice !== null && ($seat !== null || $who !== null)) {
             $msg['text'] = '';
             $msg['emoji'] = null;
             $msg['voice'] = (string) ($voice['id'] ?? '');

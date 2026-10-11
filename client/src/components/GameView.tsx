@@ -57,17 +57,83 @@ function ConnBadge({ status }: { status: 'connecting' | 'online' | 'offline' }) 
   );
 }
 
+/* ============================ أدوات الشبكة والمشاهدين ============================ */
+
+/** زر التحديث اليدوي — يبرز عند ضعف الاتصال أو انقطاعه */
+function RefreshButton({ onRefresh, status }: { onRefresh?: () => void; status: 'connecting' | 'online' | 'offline' }) {
+  const [busy, setBusy] = useState(false);
+  if (!onRefresh) return null;
+  const click = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await Promise.resolve(onRefresh());
+    } finally {
+      setTimeout(() => setBusy(false), 350);
+    }
+  };
+  return (
+    <button
+      onClick={() => void click()}
+      title="تحديث الحالة الآن"
+      aria-label="تحديث"
+      className={cn(
+        'rounded-2xl border px-2.5 py-1.5 text-sm',
+        status === 'online' ? 'border-white/10 bg-white/5' : 'border-gold-400/60 bg-gold-500/20',
+      )}
+    >
+      <span className={cn('inline-block', busy && 'animate-spin')}>🔄</span>
+    </button>
+  );
+}
+
+/** شارة عدد المشاهدين */
+function SpectatorBadge({ count, onClick }: { count: number; onClick?: () => void }) {
+  if (!count) return null;
+  return (
+    <button onClick={onClick} title="المشاهدون" className="rounded-2xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-bold">
+      👁 {count}
+    </button>
+  );
+}
+
+/** شريط تنبيه عند انقطاع الاتصال: زر تحديث واضح */
+function OfflineBanner({ onRefresh }: { onRefresh?: () => void }) {
+  return (
+    <div className="mx-3 mb-1 flex items-center justify-between gap-2 rounded-2xl bg-rose-950/60 px-3 py-2 ring-1 ring-rose-500/40">
+      <span className="text-[11px] font-bold text-rose-100">📡 انقطع الاتصال — النت ضعيف؟</span>
+      {onRefresh && (
+        <button onClick={() => void Promise.resolve(onRefresh())} className="rounded-xl bg-rose-600 px-3 py-1 text-[11px] font-black text-white active:scale-95">
+          🔄 تحديث
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** شريط وضع المشاهدة (لا يلعب — يشاهد ويتحدّث فقط) */
+function WatchingBanner() {
+  return (
+    <div className="mx-3 mb-1 rounded-2xl bg-sky-950/60 px-3 py-2 text-center text-[11px] font-bold text-sky-100 ring-1 ring-sky-500/40">
+      👁 وضع المشاهدة — تتابع الطاولة وتشارك الدردشة
+    </div>
+  );
+}
+
 /* ============================ شاشة اللعب ============================ */
 export function GameView({
   state,
   actions,
   status = 'online',
   onExit,
+  onRefresh,
 }: {
   state: RoomState;
   actions: RoomActions;
   status?: 'connecting' | 'online' | 'offline';
   onExit: () => void;
+  /** زر التحديث اليدوي عند الانقطاع */
+  onRefresh?: () => void;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -92,10 +158,10 @@ export function GameView({
 
   // لعبة التركس لها واجهتها الخاصة (تسميات، مجموعات، تدبيل)
   if (isTrix) {
-    return <TrixView state={state} actions={actions} status={status} onExit={onExit} />;
+    return <TrixView state={state} actions={actions} status={status} onExit={onExit} onRefresh={onRefresh} />;
   }
   if (isMor) {
-    return <MorView state={state} actions={actions} status={status} onExit={onExit} />;
+    return <MorView state={state} actions={actions} status={status} onExit={onExit} onRefresh={onRefresh} />;
   }
 
   return (
@@ -114,26 +180,38 @@ export function GameView({
         </div>
         <div className="flex items-center gap-2">
           <ConnBadge status={status} />
+          <SpectatorBadge count={state.spectators?.count ?? 0} onClick={() => setChatOpen(true)} />
+          <RefreshButton onRefresh={onRefresh} status={status} />
           <button onClick={() => setChatOpen(true)} className="relative rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
             💬
           </button>
         </div>
       </header>
 
+      {status === 'offline' && <OfflineBanner onRefresh={onRefresh} />}
+      {state.isSpectator && <WatchingBanner />}
+
       <ScoreBar state={state} />
 
       <GameTable state={state} onPlayCard={play} cardBack="red" shake={shake}>
-        <BidPanel
-          state={state}
-          onBid={(v) => actions.bid('bid', v)}
-          onPass={() => actions.bid('pass')}
-          onDouble={() => actions.bid('double')}
-          onTrump={(s) => actions.trump(s)}
-        />
+        {!state.isSpectator && (
+          <BidPanel
+            state={state}
+            onBid={(v) => actions.bid('bid', v)}
+            onPass={() => actions.bid('pass')}
+            onDouble={() => actions.bid('double')}
+            onTrump={(s) => actions.trump(s)}
+          />
+        )}
       </GameTable>
 
-      <RoundSummary state={state} onContinue={() => actions.continueRound()} />
-      <GameOver state={state} onExit={onExit} onRematch={() => actions.continueRound()} />
+      <RoundSummary state={state} onContinue={() => actions.continueRound()} readOnly={state.isSpectator} />
+      <GameOver
+        state={state}
+        onExit={onExit}
+        onRematch={() => actions.continueRound()}
+        readOnly={state.isSpectator}
+      />
 
       <ChatDrawer
         open={chatOpen}
@@ -163,18 +241,22 @@ export function WaitingRoom({
   actions,
   onExit,
   canStartHint = true,
+  status = 'online',
+  onRefresh,
 }: {
   state: RoomState;
   actions: RoomActions;
   onExit: () => void;
   canStartHint?: boolean;
+  status?: 'connecting' | 'online' | 'offline';
+  onRefresh?: () => void;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const toast = useStore((s) => s.toast);
   const me = state.seats[state.mySeat];
   /** رسائل اللاعبين فقط (بلا رسائل نظام) */
-  const playerChat = (state.chat ?? []).filter((c) => c.seat !== null);
+  const playerChat = (state.chat ?? []).filter((c) => c.seat !== null || c.spectator === true);
   const filled = state.seats.filter(Boolean).length;
   const freeSeats = state.seats.map((p, i) => (p === null && i !== state.mySeat ? i : -1)).filter((i) => i >= 0);
 
@@ -220,12 +302,21 @@ export function WaitingRoom({
             {filled}/4 لاعبين •{' '}
             {state.settings?.game === 'trix' ? `${state.settings?.kingdoms ?? 4} ممالك` : `هدف ${state.target}`}
             {state.settings?.game === 'mor' && <span> • {state.settings?.morMode === 'popular' ? 'الطريقة الشعبية' : 'طريقة جواكر'}</span>}
+            {(state.spectators?.count ?? 0) > 0 && <span className="text-sky-300"> • 👁 {state.spectators?.count} مشاهد</span>}
           </div>
         </div>
-        <button onClick={() => setChatOpen(true)} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
-          💬
-        </button>
+        <div className="flex items-center gap-1.5">
+          <ConnBadge status={status} />
+          <SpectatorBadge count={state.spectators?.count ?? 0} onClick={() => setChatOpen(true)} />
+          <RefreshButton onRefresh={onRefresh} status={status} />
+          <button onClick={() => setChatOpen(true)} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
+            💬
+          </button>
+        </div>
       </header>
+
+      {status === 'offline' && <OfflineBanner onRefresh={onRefresh} />}
+      {state.isSpectator && <WatchingBanner />}
 
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         {/* رمز الدعوة */}
@@ -238,9 +329,15 @@ export function WaitingRoom({
             <Button variant="ghost" onClick={() => void copyCode()}>
               📋 نسخ الرمز
             </Button>
-            <Button variant="gold" onClick={() => actions.ready?.(!me?.ready)}>
-              {me?.ready ? '✅ جاهز — إلغاء' : 'أنا جاهز'}
-            </Button>
+            {state.isSpectator ? (
+              <Button variant="gold" disabled>
+                👁 تشاهد فقط
+              </Button>
+            ) : (
+              <Button variant="gold" onClick={() => actions.ready?.(!me?.ready)}>
+                {me?.ready ? '✅ جاهز — إلغاء' : 'أنا جاهز'}
+              </Button>
+            )}
           </div>
           <button onClick={() => void invite()} className="mt-2 w-full rounded-2xl bg-white/5 py-2 text-xs text-ink-300">
             📤 أو دعوة صديق برسالة جاهزة
@@ -347,7 +444,11 @@ export function WaitingRoom({
           </div>
         </div>
 
-        {state.isHost ? (
+        {state.isSpectator ? (
+          <Panel className="text-center text-sm text-ink-300">
+            👁 أنت تشاهد الطاولة — يمكنك الجلوس في أي مقعد فارغ قبل بدء المباراة، ومشاركة الدردشة الآن.
+          </Panel>
+        ) : state.isHost ? (
           <div className="space-y-2">
             <Button variant="success" full size="lg" onClick={() => actions.start?.()} disabled={filled < 4}>
               🎮 ابدأ المباراة {filled < 4 && `(ناقص ${4 - filled})`}

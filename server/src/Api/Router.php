@@ -66,6 +66,7 @@ final class Router
                 // ============ الغرف ============
                 case 'room/create': RoomApi::create(); return;
                 case 'room/join': RoomApi::join(); return;
+                case 'room/watch': RoomApi::watch(); return;
                 case 'room/quick': RoomApi::quick(); return;
                 case 'room/leave': RoomApi::leave(); return;
                 case 'room/state': RoomApi::state(); return;

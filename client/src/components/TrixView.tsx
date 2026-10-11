@@ -222,9 +222,13 @@ function DealSummary({ state, actions }: { state: RoomState; actions: RoomAction
           {sum.contract === 'diamonds' && `أُكل الديناري ${sum.penaltyCounts.diamond}/13 💎`}
         </div>
       )}
-      <Button variant="gold" full className="mt-3" onClick={() => actions.continueRound()}>
-        التسمية التالية ▶
-      </Button>
+      {state.isSpectator ? (
+        <div className="mt-3 rounded-2xl bg-white/5 py-2 text-center text-xs text-ink-300">👁 بانتظار اللاعبين…</div>
+      ) : (
+        <Button variant="gold" full className="mt-3" onClick={() => actions.continueRound()}>
+          التسمية التالية ▶
+        </Button>
+      )}
     </Modal>
   );
 }
@@ -254,13 +258,15 @@ function TrixGameOver({ state, onExit, onRematch }: { state: RoomState; onExit: 
           </div>
         ))}
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className={cn('mt-4 grid gap-2', state.isSpectator ? 'grid-cols-1' : 'grid-cols-2')}>
         <Button variant="ghost" onClick={onExit}>
           🚪 خروج
         </Button>
-        <Button variant="gold" onClick={onRematch}>
-          🔁 مباراة جديدة
-        </Button>
+        {!state.isSpectator && (
+          <Button variant="gold" onClick={onRematch}>
+            🔁 مباراة جديدة
+          </Button>
+        )}
       </div>
     </Modal>
   );
@@ -272,11 +278,14 @@ export function TrixView({
   actions,
   status = 'online',
   onExit,
+  onRefresh,
 }: {
   state: RoomState;
   actions: RoomActions;
   status?: 'connecting' | 'online' | 'offline';
   onExit: () => void;
+  /** زر التحديث اليدوي عند انقطاع الاتصال */
+  onRefresh?: () => void;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -317,6 +326,23 @@ export function TrixView({
         </div>
         <div className="flex items-center gap-1">
           <span className={cn('size-2 rounded-full', status === 'online' ? 'bg-emerald-500' : status === 'connecting' ? 'bg-amber-500' : 'bg-rose-500')} />
+          {(state.spectators?.count ?? 0) > 0 && (
+            <button onClick={() => setChatOpen(true)} title="المشاهدون" className="rounded-2xl border border-white/10 bg-white/5 px-2 py-1.5 text-[11px] font-bold">
+              👁 {state.spectators?.count}
+            </button>
+          )}
+          {onRefresh && (
+            <button
+              onClick={() => void Promise.resolve(onRefresh())}
+              title="تحديث الحالة الآن"
+              className={cn(
+                'rounded-2xl border px-2 py-1.5 text-sm',
+                status === 'online' ? 'border-white/10 bg-white/5' : 'border-gold-400/60 bg-gold-500/20',
+              )}
+            >
+              🔄
+            </button>
+          )}
           <button onClick={() => setChatOpen(true)} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
             💬
           </button>
@@ -325,6 +351,22 @@ export function TrixView({
           </button>
         </div>
       </header>
+
+      {status === 'offline' && (
+        <div className="mx-3 mb-1 flex items-center justify-between gap-2 rounded-2xl bg-rose-950/60 px-3 py-2 ring-1 ring-rose-500/40">
+          <span className="text-[11px] font-bold text-rose-100">📡 انقطع الاتصال — النت ضعيف؟</span>
+          {onRefresh && (
+            <button onClick={() => void Promise.resolve(onRefresh())} className="rounded-xl bg-rose-600 px-3 py-1 text-[11px] font-black text-white active:scale-95">
+              🔄 تحديث
+            </button>
+          )}
+        </div>
+      )}
+      {state.isSpectator && (
+        <div className="mx-3 mb-1 rounded-2xl bg-sky-950/60 px-3 py-2 text-center text-[11px] font-bold text-sky-100 ring-1 ring-sky-500/40">
+          👁 وضع المشاهدة — تتابع الطاولة وتشارك الدردشة
+        </div>
+      )}
 
       <TrixScoreboard state={state} />
 
