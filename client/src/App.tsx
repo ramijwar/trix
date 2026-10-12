@@ -12,6 +12,7 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { ShopScreen } from './screens/ShopScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { AdminScreen } from './screens/AdminScreen';
+import { TournamentScreen } from './screens/TournamentScreen';
 
 export default function App() {
   const booted = useStore((s) => s.booted);
@@ -31,6 +32,10 @@ export default function App() {
       const nav = useNav.getState();
       if (nav.view === 'room') {
         nav.leaveRoom();
+        return true;
+      }
+      if (nav.view === 'tournament') {
+        nav.go('lobby');
         return true;
       }
       if (nav.view !== 'lobby') {
@@ -93,6 +98,7 @@ export default function App() {
     shop: <ShopScreen />,
     settings: <SettingsScreen />,
     admin: <AdminScreen />,
+    tournament: <TournamentScreen />,
   };
 
   return (

@@ -692,7 +692,7 @@ final class Trix
         $elapsed = $now - (float) ($s['turnStartedAt'] ?? $now);
 
         if ($phase === 'resolving') {
-            if ($elapsed >= 0.45) {
+            if ($elapsed >= \Trix\Core\Rooms::botDelay() * 0.9) {
                 self::resolveTrick($s);
             }
             return;
@@ -725,7 +725,7 @@ final class Trix
                 if ($pl === null || empty($pl['isBot']) || in_array((int) $i, $ready, true)) {
                     continue;
                 }
-                if ($elapsed >= (float) Config::get('bot_delay', 0.35)) {
+                if ($elapsed >= \Trix\Core\Rooms::botDelay()) {
                     self::botReveal($s, (int) $i);
                     return;
                 }
@@ -751,7 +751,7 @@ final class Trix
         $seat = (int) $s['turn'];
         $player = (array) ($s['seats'][$seat] ?? []);
         if ($player !== null && !empty($player['isBot'])) {
-            if ($elapsed >= (float) Config::get('bot_delay', 0.35)) {
+            if ($elapsed >= \Trix\Core\Rooms::botDelay()) {
                 if (!self::botAct($s)) {
                     self::autoAct($s);
                 }

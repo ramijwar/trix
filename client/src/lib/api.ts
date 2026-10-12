@@ -150,7 +150,15 @@ export async function api<T = ApiResult>(
   let url = apiUrl(route);
   let payload: string | undefined;
   if (method === 'GET') {
-    if (tok) url += `&t=${encodeURIComponent(tok)}`;
+    // مهم: نمرّر معاملات GET في الرابط (وإلا تضيع مثل بحث المدير وتصفية السجل)
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(body ?? {})) {
+      if (v === undefined || v === null) continue;
+      params.set(k, String(v));
+    }
+    if (tok) params.set('t', tok);
+    const qs = params.toString();
+    if (qs) url += (url.includes('?') ? '&' : '?') + qs;
   } else {
     payload = JSON.stringify(tok && body.token === undefined ? { ...body, token: tok } : body);
   }

@@ -58,6 +58,7 @@ final class Db
         foreach (Schema::statements() as $sql) {
             $pdo->exec($sql);
         }
+        Schema::upgrade($pdo);
         $pdo->prepare('INSERT OR REPLACE INTO meta(k, v) VALUES(?, ?)')->execute(['schema_version', (string) Schema::VERSION]);
         self::$migrated = true;
     }

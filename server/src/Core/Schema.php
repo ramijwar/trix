@@ -8,7 +8,7 @@ namespace Trix\Core;
  */
 final class Schema
 {
-    public const VERSION = 2;
+    public const VERSION = 3;
 
     public static function statements(): array
     {
@@ -86,6 +86,7 @@ final class Schema
                 player_ids TEXT NOT NULL DEFAULT '[]',
                 names TEXT NOT NULL DEFAULT '[]',
                 duration INTEGER NOT NULL DEFAULT 0,
+                game TEXT NOT NULL DEFAULT 'tarnib',
                 created_at INTEGER NOT NULL
             )",
             "CREATE INDEX IF NOT EXISTS idx_matches_created ON matches(created_at DESC)",
@@ -153,5 +154,28 @@ final class Schema
                 v TEXT NOT NULL
             )",
         ];
+    }
+
+    /**
+     * ترقيات لطيفة لقواعد بيانات قديمة (تُنفَّذ مرة عند الإقلاع، وتتجاهل الأخطاء).
+     * لا يحذف أي بيانات مستخدمين — فقط يضيف أعمدة ناقصة وينظّف غرف الألعاب المزالة.
+     */
+    public static function upgrade(\PDO $pdo): void
+    {
+        foreach ([
+            "ALTER TABLE matches ADD COLUMN game TEXT NOT NULL DEFAULT 'tarnib'",
+        ] as $sql) {
+            try {
+                $pdo->exec($sql);
+            } catch (\Throwable) {
+                // العمود موجود مسبقاً
+            }
+        }
+        // لعبة «المور» أُزيلت من المشروع: نُغلق طاولاتها القديمة حتى لا تبقى معلّقة
+        try {
+            $pdo->exec("UPDATE rooms SET status = 'closed' WHERE settings LIKE '%\"mor\"%'");
+        } catch (\Throwable) {
+            // تجاهل
+        }
     }
 }

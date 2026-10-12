@@ -11,6 +11,13 @@
 const BASE = process.env.TRIX_API || 'http://127.0.0.1:8095/index.php?r=';
 const NO_PRELOAD = process.env.TRIX_NOPRELOAD ? '&__nopreload=1' : '';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** يحوّل معاملات GET إلى رابط (تُقرأ من $_GET في الخادم) */
+const withQuery = (route, body, method) => {
+  if (method !== 'GET' || !body || Object.keys(body).length === 0) return route;
+  const qs = new URLSearchParams(Object.entries(body).map(([k, v]) => [k, String(v)])).toString();
+  // BASE ينتهي بـ index.php?r= لذا نلصق دائماً بـ & حتى لا تتشوّه قيمة r
+  return route + '&' + qs;
+};
 
 let pass = 0;
 let fail = 0;
@@ -26,7 +33,7 @@ const check = (label, cond, detail = '') => {
 
 let token = '';
 async function api(route, body = {}, method = 'POST') {
-  const res = await fetch(BASE + route + NO_PRELOAD, {
+  const res = await fetch(BASE + withQuery(route, body, method) + NO_PRELOAD, {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
     body: method === 'GET' ? undefined : JSON.stringify(body),
@@ -185,44 +192,114 @@ check('سجل اليوم يحتوي طاولة البطولة', (today.log?.room
 check('سجل اليوم يحتوي مباراة منتهية', (today.log?.matches || []).length > 0, String((today.log?.matches || []).length));
 check(
   'سجل المباريات يبيّن نوع اللعبة',
-  (today.log?.matches || []).every((m) => ['tarnib', 'trix', 'mor'].includes(String(m.game ?? ''))),
+  (today.log?.matches || []).every((m) => ['tarnib', 'trix'].includes(String(m.game ?? ''))),
   JSON.stringify((today.log?.matches || []).slice(0, 2).map((m) => m.game)),
 );
 
-console.log('\n🀄 بطولة مور:');
-token = admin.token;
-const morT = await api('admin/tournament/create', {
-  tournament: { name: 'بطولة مور', game: 'mor', capacity: 4, startAt: Math.floor(Date.now() / 1000) + 60 },
-});
-check('أُنشئت بطولة مور', morT.ok === true && morT.tournament?.game === 'mor', JSON.stringify(morT).slice(0, 140));
-const morTid = morT.tournament?.id;
-for (const p of players) {
-  token = p.token;
-  await api('tournament/join', { id: morTid });
-}
-token = admin.token;
-let morList = await api('admin/tournaments', {});
-let morRow = (morList.tournaments || []).find((x) => x.id === morTid);
-check('٤ مسجّلون في بطولة المور', morRow?.playersCount === 4, String(morRow?.playersCount));
+/* ============================ شاشة البطولة للمستخدم ============================ */
+console.log('\n🏟️ شاشة البطولة (شاشة الانتظار):');
+token = players[0].token;
+const tview = await api('tournament/view', { id: tid }, 'GET');
+check('tournament/view يفتح شاشة البطولة', tview.ok === true && tview.tournament?.id === tid, JSON.stringify(tview).slice(0, 140));
+check('الشاشة تُظهر المنظّم', (tview.tournament?.organizer?.name ?? '').length > 0, JSON.stringify(tview.tournament?.organizer));
+check('الشاشة تُظهر المشاركين', (tview.tournament?.players?.length ?? 0) >= 4, String(tview.tournament?.players?.length));
+check('الشاشة تُظهر الفائزين بعد النهاية', (tview.tournament?.winners?.length ?? 0) >= 1, JSON.stringify(tview.tournament?.winners));
 
-const morStart = await api('admin/tournament/start', { id: morTid });
-check('انطلقت بطولة المور', morStart.ok === true, JSON.stringify(morStart).slice(0, 140));
-morList = await api('admin/tournaments', {});
-morRow = (morList.tournaments || []).find((x) => x.id === morTid);
-const morMatch = (morRow?.matches || [])[0];
-check('أُنشئت طاولة مور واحدة', Boolean(morMatch?.roomCode), JSON.stringify(morMatch?.roomCode));
-if (morMatch?.roomCode) {
-  // نستخدم رمز أحد اللاعبين المشاركين في الطاولة (المدير ليس مقعداً فيها)
-  const seatToken = (players.find((p) => (morMatch.seats || []).some((s) => s.userId === p.id)) || players[0]).token;
-  token = seatToken;
-  const morState = await api('room/state', { room: morMatch.roomCode });
-  const room = morState.room || morState;
-  check('طاولة البطولة لعبة مور', room?.settings?.game === 'mor', JSON.stringify(room?.settings?.game));
-  check('هدف بطولة المور ٢٠١', Number(room?.target) === 201, String(room?.target));
-  check('طريقة الحساب جواكر', (room?.settings?.morMode ?? 'jawaker') === 'jawaker', JSON.stringify(room?.settings?.morMode));
-  check('المباراة بدأت (طور اللعب)', ['playing', 'round_end', 'game_end'].includes(String(room?.phase)), String(room?.phase));
-  check('حالة المور موجودة', Boolean(room?.mor), JSON.stringify(Object.keys(room?.mor ?? {})).slice(0, 100));
+/* ============================ تعديل بطولة وإلغاؤها وحذفها ============================ */
+console.log('\n✏️ تعديل/إلغاء/حذف البطولة:');
+token = admin.token;
+const editT = await api('admin/tournament/update', {
+  id: tid,
+  tournament: { name: 'بطولة معدّلة', capacity: 4, startAt: Math.floor(Date.now() / 1000) + 900 },
+});
+check('تعديل البطولة ينجح', editT.ok === true && editT.tournament?.name === 'بطولة معدّلة', JSON.stringify(editT).slice(0, 140));
+check('عدد المشاركين عُدّل', editT.tournament?.capacity === 4, String(editT.tournament?.capacity));
+
+// بطولة مؤقتة للتجربة: إلغاء ثم حذف
+const tempT = await api('admin/tournament/create', {
+  tournament: { name: 'بطولة للإلغاء', game: 'tarnib', capacity: 4, startAt: Math.floor(Date.now() / 1000) + 600 },
+});
+const tempId = tempT.tournament?.id;
+for (const p of players.slice(0, 4)) {
+  token = p.token;
+  await api('tournament/join', { id: tempId });
 }
+token = players[0].token;
+let mineList = await api('tournaments', {}, 'GET');
+check('البطولة تظهر للاعب بعد التسجيل', (mineList.mine || []).some((x) => x.id === tempId), JSON.stringify((mineList.mine || []).map((x) => x.id)));
+token = admin.token;
+const cancel = await api('admin/tournament/status', { id: tempId, status: 'cancelled' });
+check('إلغاء البطولة ينجح', cancel.ok === true, JSON.stringify(cancel).slice(0, 120));
+token = players[0].token;
+mineList = await api('tournaments', {}, 'GET');
+check('البطولة الملغاة تختفي من عند اللاعبين', !(mineList.mine || []).some((x) => x.id === tempId));
+check('البطولة الملغاة لا تظهر في القائمة العامة', !(mineList.tournaments || []).some((x) => x.id === tempId));
+token = admin.token;
+const del = await api('admin/tournament/delete', { id: tempId });
+check('حذف البطولة ينجح', del.ok === true, JSON.stringify(del).slice(0, 120));
+list = await api('admin/tournaments', {});
+check('البطولة المحذوفة غير موجودة في اللوحة', !(list.tournaments || []).some((x) => x.id === tempId));
+const goneView = await (async () => {
+  token = players[0].token;
+  return api('tournament/view', { id: tempId }, 'GET');
+})();
+check('شاشة البطولة المحذوفة تُرجع خطأ واضحاً', goneView.ok === false && goneView.code === 'not_found', JSON.stringify(goneView).slice(0, 120));
+
+/* ============================ إدارة المستخدمين ============================ */
+console.log('\n👤 تعديل المستخدمين وحذفهم:');
+token = admin.token;
+const target = players[7];
+const upd = await api('admin/user/update', {
+  id: target.user.id,
+  name: 'اسم معدّل',
+  coins: 1234,
+  xp: 900,
+  is_admin: false,
+  banned: false,
+});
+check('admin/user/update ينجح', upd.ok === true, JSON.stringify(upd).slice(0, 120));
+const usersList = await api('admin/users', { q: 'اسم معدّل' }, 'GET');
+const updated = (usersList.users || []).find((u) => u.id === target.user.id);
+check('الاسم تعدّل فعلاً', updated?.name === 'اسم معدّل', JSON.stringify(updated?.name));
+check('العملات تعدّلت', updated?.coins === 1234, String(updated?.coins));
+check('الخبرة رفعت المستوى', Number(updated?.level) > 1, `level=${updated?.level}`);
+const banIt = await api('admin/user/action', { id: target.user.id, action: 'ban' });
+check('إيقاف المستخدم ينجح', banIt.ok === true);
+const bannedList = await api('admin/users', { q: 'اسم معدّل' }, 'GET');
+check('المستخدم موقوف في القائمة', (bannedList.users || []).find((u) => u.id === target.user.id)?.banned === true);
+await api('admin/user/action', { id: target.user.id, action: 'unban' });
+const newPass = await api('admin/user/action', { id: target.user.id, action: 'password', password: 'newpass123' });
+check('تعيين كلمة مرور جديدة ينجح', newPass.ok === true, JSON.stringify(newPass).slice(0, 120));
+const shortPass = await api('admin/user/action', { id: target.user.id, action: 'password', password: '12' });
+check('كلمة المرور القصيرة مرفوضة', shortPass.ok === false && shortPass.code === 'weak_password', JSON.stringify(shortPass).slice(0, 120));
+
+// حذف مستخدم تجريبي
+const victim = await loginAs('del' + Date.now().toString(36), 'للحذف');
+const removeUser = await api('admin/user/action', { id: victim.user.id, action: 'delete' });
+check('حذف المستخدم ينجح', removeUser.ok === true, JSON.stringify(removeUser).slice(0, 120));
+const afterDelete = await api('admin/users', { q: 'للحذف' }, 'GET');
+check('المستخدم المحذوف لم يبقَ في القائمة', !(afterDelete.users || []).some((u) => u.id === victim.user.id));
+
+/* ============================ سجل الطاولات الكامل ============================ */
+console.log('\n📜 سجل الطاولات الكامل:');
+token = admin.token;
+const hist = await api('admin/history', { limit: 30 }, 'GET');
+check('admin/history يعمل', hist.ok === true && Array.isArray(hist.matches), JSON.stringify(hist).slice(0, 140));
+check('السجل يعرض إجمالي المباريات', Number(hist.totals?.matches) > 0, String(hist.totals?.matches));
+check('السجل يعرض إجمالي الطاولات', Number(hist.totals?.rooms) > 0, String(hist.totals?.rooms));
+const firstMatch = (hist.matches || [])[0];
+check('كل مباراة فيها النتيجة', firstMatch && Number.isFinite(firstMatch.scoreA) && Number.isFinite(firstMatch.scoreB));
+check('كل مباراة فيها الفائز بالاسم', Array.isArray(firstMatch?.winners) && firstMatch.winners.filter(Boolean).length > 0, JSON.stringify(firstMatch?.winners));
+check('كل مباراة فيها نوع اللعبة', ['tarnib', 'trix'].includes(String(firstMatch?.game)), String(firstMatch?.game));
+check('السجل يعرض كل الطاولات السابقة', (hist.rooms || []).length > 0, String((hist.rooms || []).length));
+check('طاولة منتهية تحمل نتيجتها', (hist.rooms || []).some((r) => r.finished && Number.isFinite(r.scoreA)), JSON.stringify((hist.rooms || []).slice(0, 2)));
+const filtered = await api('admin/history', { limit: 10, game: 'trix' }, 'GET');
+check('تصفية السجل بنوع اللعبة تعمل', (filtered.matches || []).every((m) => m.game === 'trix'), JSON.stringify((filtered.matches || []).map((m) => m.game).slice(0, 5)));
+const deniedHist = await (async () => {
+  token = players[0].token;
+  return api('admin/history', {}, 'GET');
+})();
+check('السجل ممنوع على اللاعب العادي', deniedHist.ok === false && deniedHist.code === 'not_admin');
 
 console.log(`\n✅ ناجح: ${pass}   ❌ فاشل: ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

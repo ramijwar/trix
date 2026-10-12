@@ -70,6 +70,7 @@ final class Router
                 case 'room/quick': RoomApi::quick(); return;
                 case 'room/leave': RoomApi::leave(); return;
                 case 'room/state': RoomApi::state(); return;
+                case 'room/chats': RoomApi::chats(); return;
                 case 'room/poll': RoomApi::poll(); return;
                 case 'room/seat': RoomApi::seat(); return;
                 case 'room/swap': RoomApi::swap(); return;
@@ -94,27 +95,25 @@ final class Router
                 case 'game/contract': RoomApi::contract(); return;
                 case 'game/reveal': RoomApi::reveal(); return;
 
-                // ============ المور ============
-                case 'mor/draw': RoomApi::morDraw(); return;
-                case 'mor/meld': RoomApi::morMeld(); return;
-                case 'mor/add': RoomApi::morAdd(); return;
-                case 'mor/discard': RoomApi::morDiscard(); return;
-                case 'mor/take': RoomApi::morTakeMor(); return;
 
                 // ============ لوحة المدير ============
                 case 'admin/stats': AdminApi::stats(); return;
                 case 'admin/today': AdminApi::today(); return;
                 case 'admin/users': AdminApi::users(); return;
                 case 'admin/user/action': AdminApi::userAction(); return;
+                case 'admin/user/update': AdminApi::userUpdate(); return;
+                case 'admin/history': AdminApi::history(); return;
                 case 'admin/tournaments': AdminApi::tournaments(); return;
                 case 'admin/tournament/create': AdminApi::createTournament(); return;
                 case 'admin/tournament/update': AdminApi::updateTournament(); return;
                 case 'admin/tournament/status': AdminApi::tournamentStatus(); return;
                 case 'admin/tournament/start': AdminApi::tournamentStart(); return;
                 case 'admin/tournament/advance': AdminApi::tournamentAdvance(); return;
+                case 'admin/tournament/delete': AdminApi::tournamentDelete(); return;
 
                 // ============ البطولات (لللاعبين) ============
                 case 'tournaments': AdminApi::myTournaments(); return;
+                case 'tournament/view': AdminApi::tournamentView(); return;
                 case 'tournament/join': AdminApi::tournamentJoin(); return;
                 case 'tournament/leave': AdminApi::tournamentLeave(); return;
 

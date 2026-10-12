@@ -137,9 +137,8 @@ export interface PlayedTrick {
   winner: number | null;
 }
 
-import type { MorState } from './mor';
 
-export type GameKind = 'tarnib' | 'trix' | 'mor';
+export type GameKind = 'tarnib' | 'trix';
 
 export interface RoomSettings {
   /** نوع اللعبة: طرنيب (شراكة) أو تركس (فردية) */
@@ -162,8 +161,6 @@ export interface RoomSettings {
   quickPlay: boolean;
   /** صوت اللعبة مفعّل */
   sound: boolean;
-  /** طريقة حساب المور: جواكر أو الشعبية */
-  morMode?: 'jawaker' | 'popular';
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -514,8 +511,6 @@ export interface TableState {
 
 /** حالة الغرفة كما يرسلها الخادم */
 export interface RoomState extends TableState {
-  /** حالة لعبة المور (إن كانت الغرفة تلعب المور) */
-  mor?: MorState | null;
   version: number;
   roomId: string;
   roomCode: string;
@@ -528,6 +523,58 @@ export interface RoomState extends TableState {
   spectators?: { count: number; list: { userId: number; name: string; avatar: string }[] };
   swapRequests: SwapRequest[];
   allReady: boolean;
+  /** آخر معرّف رسالة دردشة (لجلب الجديد فقط بدل إرسال الدردشة كاملة مع كل تحديث) */
+  chatLastId?: number;
+}
+
+/* ============================ البطولات ============================ */
+
+export interface TournamentPlayer {
+  userId: number;
+  name: string;
+  avatar: string;
+  level: number;
+  status: string;
+  place: number;
+}
+
+export interface TournamentMatchSeat {
+  userId: number;
+  name: string;
+  avatar: string;
+  level: number;
+  isBot?: boolean;
+}
+
+export interface TournamentMatch {
+  id: number;
+  round: number;
+  roomCode: string;
+  roomId: string;
+  seats: TournamentMatchSeat[];
+  status: string;
+  winnerSeat: number | null;
+  runnerSeat: number | null;
+}
+
+export interface Tournament {
+  id: number;
+  code: string;
+  name: string;
+  game: string;
+  capacity: number;
+  startAt: number;
+  status: string;
+  round: number;
+  playersCount: number;
+  players: TournamentPlayer[];
+  matches: TournamentMatch[];
+  winners: { place: number; userId: number; name: string; avatar: string; isBot?: boolean }[];
+  joined: boolean;
+  myStatus: string | null;
+  organizer?: { userId: number; name: string; avatar: string };
+  isOpen?: boolean;
+  cancelled?: boolean;
 }
 
 /** عنصر قائمة الغرف في الردهة */

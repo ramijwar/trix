@@ -31,6 +31,9 @@ export class RoomSession {
   private softAbort = false;
   /** وضع المشاهدة: يُرسل مع الاستعلام حتى يبقى المشاهد مسجّلاً بعد انقطاع طويل */
   watchMode = false;
+  /** الدردشة المجمّعة محلياً (تُجلب الجديدة منها فقط لتوفير البيانات) */
+  private chatLog: WireChat[] = [];
+  private chatLastId = 0;
   private onOnline?: () => void;
   private onOffline?: () => void;
 
@@ -94,6 +97,7 @@ export class RoomSession {
         await api('room/watch', { room: this.roomId }).catch(() => undefined);
       }
       this.apply(res.room);
+      void this.pullChat();
       this.setStatus('online');
     } catch (e) {
       this.setStatus('offline');
@@ -101,9 +105,61 @@ export class RoomSession {
     }
   }
 
+  /** جلب رسائل الدردشة الجديدة فقط (عند تغيّر آخر معرّف) */
+  private async pullChat(): Promise<void> {
+    const lastId = this.state?.chatLastId ?? 0;
+    if (lastId <= this.chatLastId) {
+      return;
+    }
+    try {
+      const res = await api<{ messages: WireChat[] }>(
+        'room/chats',
+        { room: this.roomId, since: this.chatLastId },
+        { timeout: 12000 },
+      );
+      const list = res.messages ?? [];
+      if (list.length === 0) {
+        this.chatLastId = lastId;
+        return;
+      }
+      const known = new Set(this.chatLog.map((m) => m.id));
+      for (const m of list) {
+        if (!known.has(m.id)) {
+          this.chatLog.push(m);
+          known.add(m.id);
+        }
+      }
+      if (this.chatLog.length > 60) {
+        this.chatLog = this.chatLog.slice(-60);
+      }
+      this.chatLastId = Math.max(this.chatLastId, ...list.map((m) => m.id ?? 0));
+      const st = this.state;
+      if (st) {
+        st.chat = this.chatLog;
+        st.chatLastId = this.chatLastId;
+        this.emit();
+      }
+    } catch {
+      // فشل الجلب لا يعطّل اللعبة — نُعيد المحاولة مع التحديث التالي
+    }
+  }
+
   private apply(room: RoomState): void {
     const prev = this.state;
     if (room.isSpectator) this.watchMode = true;
+    /*
+     * الدردشة لا تصل مع كل تحديث (توفير بيانات للشبكات الضعيفة):
+     * إن وصلت كاملة (room/state أو أول دخول) نتبنّاها، وإلا نُبقي ما عندنا
+     * ونجلب الجديد فقط عند اختلاف آخر معرّف.
+     */
+    if (Array.isArray(room.chat)) {
+      this.chatLog = room.chat as WireChat[];
+      this.chatLastId = Math.max(this.chatLastId, room.chatLastId ?? 0, ...this.chatLog.map((m) => m.id ?? 0), 0);
+      room.chat = this.chatLog;
+    } else {
+      room.chat = this.chatLog;
+    }
+    room.chatLastId = Math.max(room.chatLastId ?? 0, this.chatLastId);
     this.state = room;
     if (!prev || prev.version !== room.version || JSON.stringify(prev) !== JSON.stringify(room)) {
       this.emit();
@@ -130,6 +186,7 @@ export class RoomSession {
         this.setStatus('online');
         if (res.room) {
           this.apply(res.room);
+          void this.pullChat();
           /*
            * لو كان المشاهد مسجّلاً ثم طال انقطاعه فأُزيل من القائمة، يعود الخادم بعرض
            * «غرفة الانتظار» بينما الطاولة تلعب — هنا نُعيد تسجيل المشاهدة فوراً.
@@ -284,26 +341,6 @@ export class RoomSession {
     await this.act('room/voice', { room: this.roomId, audio, dur: Math.max(1, Math.round(duration)), mime });
   }
 
-  /* ===== المور ===== */
-  morDraw(source: 'deck' | 'pile'): Promise<void> {
-    return this.act('mor/draw', { source });
-  }
-
-  morMeld(cards: string[]): Promise<void> {
-    return this.act('mor/meld', { cards });
-  }
-
-  morAdd(meld: number, cards: string[]): Promise<void> {
-    return this.act('mor/add', { meld, cards });
-  }
-
-  morDiscard(card: string): Promise<void> {
-    return this.act('mor/discard', { card });
-  }
-
-  morTakeMor(): Promise<void> {
-    return this.act('mor/take', {});
-  }
 
   ready(ready: boolean): Promise<void> {
     return this.act('room/ready', { ready });

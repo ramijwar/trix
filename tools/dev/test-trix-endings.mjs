@@ -79,7 +79,8 @@ while (guard++ < 6000 && !finished) {
       // تنتهي فور أكل الكبة: إما نهاية مبكرة (وصلت الكبة قبل آخر أكلة) أو صادف أنها آخر أكلة
       good = consistent && kbeh === 1 && (handsLeft > 0 ? sum.endReason === 'penalties' : true);
     } else if (sum.contract === 'queens') {
-      good = consistent && queens === 4 && sum.endReason === 'penalties' && handsLeft > 0;
+      // إن صادف أن آخر ملكة أُكلت في آخر أكلة فلا يمكن إنهاء التسمية قبلها
+      good = consistent && queens === 4 && (handsLeft > 0 ? sum.endReason === 'penalties' : true);
     } else if (sum.contract === 'diamonds') {
       // إن صادف آخر ديناري آخر أكلة فلا يمكن إنهاء التسمية قبلها
       good = consistent && diamonds === 13 && (handsLeft > 0 ? sum.endReason === 'penalties' : true);

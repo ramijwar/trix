@@ -15,6 +15,12 @@ const BASE = process.env.TRIX_API || 'http://127.0.0.1:8095/index.php?r=';
 const NO_PRELOAD = process.env.TRIX_NOPRELOAD ? '&__nopreload=1' : '';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** يحوّل معاملات GET إلى رابط (تُقرأ من $_GET في الخادم) */
+const withQuery = (route, body, method) => {
+  if (method !== 'GET' || !body || Object.keys(body).length === 0) return route;
+  const qs = new URLSearchParams(Object.entries(body).map(([k, v]) => [k, String(v)])).toString();
+  return route + '&' + qs;
+};
 
 let pass = 0;
 let fail = 0;
@@ -29,7 +35,7 @@ const check = (label, cond, detail = '') => {
 };
 
 async function api(route, body = {}, token = '', method = 'POST') {
-  const res = await fetch(BASE + route + NO_PRELOAD, {
+  const res = await fetch(BASE + withQuery(route, body, method) + NO_PRELOAD, {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
     body: method === 'GET' ? undefined : JSON.stringify(body),
@@ -111,7 +117,10 @@ check('الرد الصغير يحمل رقم النسخة والوقت', Number(
 await api('room/chat', { room: quiet.roomId, text: 'تنبيه المشاهدين' }, host);
 const woke = await api('room/poll', { room: quiet.roomId, since: q1.version, wait: 4 }, guest);
 check('التغيير يعيد الحالة الكاملة فوراً', woke.ok === true && woke.room && woke.room.version > q1.version, JSON.stringify({ v: woke.room?.version, since: q1.version }).slice(0, 120));
-check('الحالة الكاملة تُرسل عند التغيير', Array.isArray(woke.room?.chat) && woke.room.chat.some((m) => (m.text || '').includes('تنبيه المشاهدين')));
+// الدردشة تُجلب منفصلة (توفير بيانات): الاستعلام يحمل آخر معرّف فقط ثم نجلب الجديد
+check('الاستعلام لا يحمل الدردشة كاملة (توفير بيانات)', woke.room?.chat === undefined && Number(woke.room?.chatLastId) > 0, JSON.stringify(Object.keys(woke.room ?? {})).slice(0, 120));
+const newChats = await api('room/chats', { room: quiet.roomId, since: 0 }, guest);
+check('room/chats يجلب الرسائل الجديدة فقط', Array.isArray(newChats.messages) && newChats.messages.some((m) => (m.text || '').includes('تنبيه المشاهدين')), JSON.stringify(newChats).slice(0, 140));
 const idle2 = await api('room/poll', { room: quiet.roomId, since: woke.room.version, wait: 2 }, guest);
 check('ثم يعود للرد الصغير', idle2.unchanged === true && idle2.room === null, JSON.stringify(idle2).slice(0, 120));
 
@@ -136,18 +145,6 @@ const wSeat = await api('room/seat', { room: waitingRoom.roomId, seat: 1 }, gues
 check('المشاهد يستطيع الجلوس في مقعد فارغ قبل البدء', wSeat.ok === true && wSeat.room?.mySeat === 1, JSON.stringify(wSeat).slice(0, 140));
 check('بعد الجلوس لم يبقَ مشاهداً', wSeat.room?.isSpectator === false, String(wSeat.room?.isSpectator));
 await api('room/leave', { room: waitingRoom.roomId }, guest);
-
-/* ============================ المشاهدة في المور ============================ */
-const morRoom = (await api('room/create', { name: 'مور للمشاهدة', settings: { game: 'mor', morMode: 'jawaker', target: 101 } }, host)).room;
-await api('room/bot/add', { room: morRoom.roomId }, host);
-await api('room/bot/add', { room: morRoom.roomId }, host);
-await api('room/bot/add', { room: morRoom.roomId }, host);
-await api('room/start', { room: morRoom.roomId }, host);
-const morWatch = (await api('room/watch', { room: morRoom.roomCode }, guest)).room;
-check('مشاهدة المور تعمل', morWatch?.isSpectator === true && morWatch?.phase === 'playing', `${morWatch?.phase}`);
-check('المشاهد لا يرى أوراق المور', (morWatch?.myHand || []).length === 0 && (morWatch?.mor?.pileCards || []).length === 0);
-check('أزرار المور معطّلة للمشاهد', !morWatch?.mor?.canTakePile && !morWatch?.mor?.canTakeMor && !morWatch?.mor?.canCloseNow);
-check('المشاهد يرى نزولات الفريقين', Array.isArray(morWatch?.mor?.melds?.[0]) && Array.isArray(morWatch?.mor?.melds?.[1]));
 
 /* ============================ الطاولات المحمية بكلمة مرور ============================ */
 const privateRoom = (await api('room/create', { name: 'خاصة', settings: { game: 'tarnib' }, password: '1234', isPrivate: true }, host)).room;

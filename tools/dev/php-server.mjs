@@ -83,7 +83,16 @@ async function bootPhp() {
   await ensureDir('/dev');
   await copyTree(path.join(SERVER_DIR, 'src'), '/src');
   await php.writeFile('/index.php', fs.readFileSync(path.join(SERVER_DIR, 'index.php')));
-  await php.writeFile('/config.php', fs.readFileSync(path.join(SERVER_DIR, 'config.php')));
+  // عند تشغيل الاختبارات (TRIX_FAST=1) نُسرّع إيقاع البوتات فقط لتبقى سريعة
+  let configSrc = fs.readFileSync(path.join(SERVER_DIR, 'config.php'), 'utf8');
+  if (process.env.TRIX_FAST) {
+    configSrc = configSrc
+      .replace(/'bot_delay'\s*=>\s*[0-9.]+/, "'bot_delay' => 0.05")
+      .replace(/'resolve_delay'\s*=>\s*[0-9.]+/, "'resolve_delay' => 0.05")
+      .replace(/'round_end_delay'\s*=>\s*[0-9.]+/, "'round_end_delay' => 0.2");
+    console.log('[dev] وضع الاختبار السريع مفعّل (TRIX_FAST)');
+  }
+  await php.writeFile('/config.php', configSrc);
   await php.writeFile('/config.sample.php', fs.readFileSync(path.join(SERVER_DIR, 'config.sample.php')));
   await php.writeFile('/dev/bridge.php', fs.readFileSync(path.join(__dirname, 'bridge.php')));
 

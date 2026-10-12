@@ -69,6 +69,9 @@ final class Tournaments
             'winners' => is_array($winners) ? $winners : [],
             'joined' => $mine !== null,
             'myStatus' => $mine['status'] ?? null,
+            'organizer' => self::organizer((int) $t['created_by']),
+            'isOpen' => (string) $t['status'] === 'registration',
+            'cancelled' => (string) $t['status'] === 'cancelled',
         ];
     }
 
@@ -104,7 +107,7 @@ final class Tournaments
             Http::fail('اسم البطولة مطلوب', 422, 'name_required');
         }
         $game = (string) ($in['game'] ?? 'tarnib');
-        if (!in_array($game, ['tarnib', 'trix', 'mor'], true)) {
+        if (!in_array($game, ['tarnib', 'trix'], true)) {
             $game = 'tarnib';
         }
         $capacity = (int) ($in['capacity'] ?? 8);
@@ -436,22 +439,6 @@ final class Tournaments
                 if (!is_array($scores)) {
                     continue;
                 }
-                $tGame = (string) ($state['settings']['game'] ?? 'tarnib');
-                if ($tGame === 'mor') {
-                    // المور: فريقان متقابلان (المقاعد 0/2 ثم 1/3) — الفائز بفريقه
-                    if (count($scores) < 2) {
-                        continue;
-                    }
-                    $winnerTeam = ((int) $scores[0] >= (int) $scores[1]) ? 0 : 1;
-                    Db::exec('UPDATE tournament_matches SET status = ?, winner_seat = ?, runner_seat = ? WHERE id = ?', [
-                        'done',
-                        $winnerTeam,
-                        1 - $winnerTeam,
-                        (int) $m['id'],
-                    ]);
-                    $changed = true;
-                    continue;
-                }
                 if (count($scores) < 4) {
                     continue;
                 }
@@ -469,6 +456,52 @@ final class Tournaments
                 self::advance($id);
             }
         }
+    }
+
+    /** بيانات منشئ البطولة (يظهر في شاشة انتظار البطولة) */
+    public static function organizer(int $userId): array
+    {
+        $row = $userId > 0 ? Db::one('SELECT display_name, avatar FROM users WHERE id = ?', [$userId]) : null;
+        return [
+            'userId' => $userId,
+            'name' => (string) ($row['display_name'] ?? 'الإدارة'),
+            'avatar' => (string) ($row['avatar'] ?? '🛡️'),
+        ];
+    }
+
+    /** تحديث التصفيات بلا إرهاق الخادم (مرة كل بضع ثوانٍ كحد أقصى) */
+    public static function syncThrottled(float $seconds = 4.0): void
+    {
+        $now = time();
+        $last = (int) Db::value('SELECT v FROM meta WHERE k = ?', ['tour_sync']);
+        if ($now - $last < (int) $seconds) {
+            return;
+        }
+        Db::exec('INSERT OR REPLACE INTO meta(k, v) VALUES(?, ?)', ['tour_sync', (string) $now]);
+        self::sync();
+    }
+
+    /** حذف بطولة بكل تفاصيلها وإغلاق طاولاتها */
+    public static function remove(int $id): void
+    {
+        $t = self::row($id);
+        if ($t === null) {
+            Http::fail('البطولة غير موجودة', 404, 'not_found');
+        }
+        foreach (self::matches($id) as $m) {
+            $roomId = (string) $m['room_id'];
+            if ($roomId === '') {
+                continue;
+            }
+            try {
+                // نُنهي الطاولة إن كانت تعمل حتى لا تبقى معلّقة للاعبين
+                Db::exec("UPDATE rooms SET status = 'closed' WHERE id = ?", [$roomId]);
+            } catch (\Throwable) {
+            }
+        }
+        Db::exec('DELETE FROM tournament_matches WHERE tournament_id = ?', [$id]);
+        Db::exec('DELETE FROM tournament_players WHERE tournament_id = ?', [$id]);
+        Db::exec('DELETE FROM tournaments WHERE id = ?', [$id]);
     }
 
     /** إنشاء رمز بطولة فريد */

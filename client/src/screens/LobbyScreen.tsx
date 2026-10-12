@@ -42,14 +42,11 @@ export function LobbyScreen() {
     return () => clearInterval(id);
   }, [load]);
 
-  const quickPlay = async (game: 'tarnib' | 'trix' | 'mor' = 'tarnib') => {
-    setBusy(game === 'trix' ? 'quick2' : game === 'mor' ? 'quick3' : 'quick');
+  const quickPlay = async (game: 'tarnib' | 'trix' = 'tarnib') => {
+    setBusy(game === 'trix' ? 'quick2' : 'quick');
     try {
       const res = await api<{ room: { roomId: string; roomCode: string } }>('room/quick', {
-        settings:
-          game === 'mor'
-            ? { game, morMode: 'jawaker', target: 201, kingdoms: 1 }
-            : { game, kingdoms: 1, target: 31 },
+        settings: { game, kingdoms: 1, target: 31 },
       });
       // أكمل الطاولة بالبوتات ليبدأ اللعب فوراً
       for (let i = 0; i < 3; i++) {
@@ -191,10 +188,6 @@ export function LobbyScreen() {
             <span className="text-xl">🧩</span>
             <span className="text-sm">تركس سريع</span>
           </Button>
-          <Button variant="blue" size="lg" loading={busy === 'quick3'} onClick={() => void quickPlay('mor')} className="h-16 flex-col !gap-0.5 !bg-fuchsia-700">
-            <span className="text-xl">🀄</span>
-            <span className="text-sm">مور سريع</span>
-          </Button>
           <Button variant="blue" size="lg" onClick={() => setCreateOpen(true)} className="h-16 flex-col !gap-0.5">
             <span className="text-xl">➕</span>
             <span className="text-sm">إنشاء طاولة</span>
@@ -245,7 +238,7 @@ export function LobbyScreen() {
               className="glass flex w-full items-center gap-3 rounded-2xl p-3 text-right transition active:scale-[.99]"
             >
               <div className={cn('flex size-11 items-center justify-center rounded-2xl text-xl', r.status === 'playing' ? 'bg-rose-500/20' : 'bg-emerald-500/20')}>
-                {r.status === 'playing' ? '🔥' : r.game === 'mor' ? '🀄' : r.game === 'trix' ? '🧩' : '🪑'}
+                {r.status === 'playing' ? '🔥' : r.game === 'trix' ? '🧩' : '🪑'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -259,8 +252,8 @@ export function LobbyScreen() {
                     {(r.spectators ?? 0) > 0 && ` • 👁 ${r.spectators} مشاهد`}
                   </span>
                   <span>•</span>
-                  <span className={cn(r.game === 'mor' ? 'text-fuchsia-300' : r.game === 'trix' ? 'text-emerald-300' : 'text-sky-300')}>
-                    {r.game === 'mor' ? 'مور 🀄' : r.game === 'trix' ? 'تركس 🧩' : 'طرنيب 🃏'}
+                  <span className={cn(r.game === 'trix' ? 'text-emerald-300' : 'text-sky-300')}>
+                    {r.game === 'trix' ? 'تركس 🧩' : 'طرنيب 🃏'}
                   </span>
                   <span>•</span>
                   <span>{r.game === 'trix' ? `${r.kingdoms ?? 4} ممالك` : `هدف ${r.target}`}</span>
@@ -324,11 +317,9 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
   const toast = useStore((s) => s.toast);
   const enterRoom = useNav((s) => s.enterRoom);
   const [name, setName] = useState('');
-  const [game, setGame] = useState<'tarnib' | 'trix' | 'mor'>('tarnib');
+  const [game, setGame] = useState<'tarnib' | 'trix'>('tarnib');
   const [kingdoms, setKingdoms] = useState<1 | 2 | 4>(4);
   const [target, setTarget] = useState<number>(31);
-  const [morMode, setMorMode] = useState<'jawaker' | 'popular'>('jawaker');
-  const [morTarget, setMorTarget] = useState<number>(201);
   const [turnTime, setTurnTime] = useState(30);
   const [allowDouble, setAllowDouble] = useState(false);
   const [allowNoTrump, setAllowNoTrump] = useState(false);
@@ -344,8 +335,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
         settings: {
           game,
           kingdoms,
-          target: game === 'mor' ? morTarget : target,
-          morMode,
+          target,
           turnTime,
           bidTime: turnTime,
           allowDouble,
@@ -382,13 +372,6 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
               <span className="block text-sm font-black">🧩 تركس</span>
               <span className="block text-[10px] opacity-80">فردي • ٥ تسميات • ختيار الكبة</span>
             </button>
-            <button
-              onClick={() => setGame('mor')}
-              className={cn('col-span-2 rounded-2xl px-3 py-2.5 text-right transition', game === 'mor' ? 'bg-fuchsia-700 text-white' : 'bg-white/8')}
-            >
-              <span className="block text-sm font-black">🀄 مور</span>
-              <span className="block text-[10px] opacity-80">فريقان متقابلان • نزولات ومشاريع • كومتا مور</span>
-            </button>
           </div>
         </div>
 
@@ -419,45 +402,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         )}
 
-        {game === 'mor' && (
-          <div>
-            <label className="mb-1 block text-xs text-ink-300">طريقة الحساب</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setMorMode('jawaker')}
-                className={cn('rounded-2xl px-3 py-2 text-right transition', morMode === 'jawaker' ? 'bg-fuchsia-600 text-white' : 'bg-white/8')}
-              >
-                <span className="block text-sm font-black">طريقة جواكر</span>
-                <span className="block text-[10px] opacity-80">٣ = ٠٫٥ • ٧ = ١ • آس/جوكر = ١٫٥</span>
-              </button>
-              <button
-                onClick={() => setMorMode('popular')}
-                className={cn('rounded-2xl px-3 py-2 text-right transition', morMode === 'popular' ? 'bg-fuchsia-600 text-white' : 'bg-white/8')}
-              >
-                <span className="block text-sm font-black">الطريقة الشعبية</span>
-                <span className="block text-[10px] opacity-80">قيمة الأوراق + ١٠٠ لكل مشروع</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {game === 'mor' ? (
-          <div>
-            <label className="mb-1 block text-xs text-ink-300">هدف المباراة</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(morMode === 'popular' ? [501, 1001, 1501] : [101, 151, 201]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setMorTarget(t)}
-                  className={cn('rounded-2xl py-2 font-bold transition', morTarget === t ? 'bg-gold-500 text-felt-950' : 'bg-white/8 text-ink-100')}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className={cn(game === 'trix' && 'hidden')}>
+        <div className={cn(game === 'trix' && 'hidden')}>
             <label className="mb-1 block text-xs text-ink-300">النقاط المطلوبة للفوز</label>
             <div className="grid grid-cols-3 gap-2">
               {([31, 41, 61] as const).map((t) => (
@@ -470,8 +415,7 @@ function CreateRoomModal({ open, onClose }: { open: boolean; onClose: () => void
                 </button>
               ))}
             </div>
-          </div>
-        )}
+        </div>
 
         <div>
           <label className="mb-1 block text-xs text-ink-300">مؤقت الدور / المزايدة</label>

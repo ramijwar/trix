@@ -16,6 +16,11 @@ final class LobbyApi
     public static function lobby(): void
     {
         Auth::requireUser();
+        /*
+         * كل من يفتح الردهة يدفع الطاولات المهجورة (بلا لاعب بشري) خطوة للأمام،
+         * حتى تُكمل البوتات المباراة وتُسجَّل نتيجتها — بميزانية صغيرة لا تُبطئ الردهة.
+         */
+        Rooms::driveOrphans(1, 900, 0.35);
         $rooms = Rooms::roomList((int) (Http::input('limit', 30) ?? 30));
         $stats = [
             'online' => Users::onlineCount(),

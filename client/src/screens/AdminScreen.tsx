@@ -5,6 +5,8 @@ import { useNav } from '../lib/nav';
 import { BottomNav, TopBar } from '../components/Nav';
 import { Avatar, Button, EmptyState, Modal, SectionTitle, Spinner } from '../components/ui';
 import { cn, fmt, timeAgo } from '../lib/utils';
+import type { Tournament } from '../game/types';
+import { TournamentEdit } from './TournamentEdit';
 
 /* ============================ الأنواع ============================ */
 
@@ -14,6 +16,7 @@ interface AdminUser {
   name: string;
   avatar: string;
   level: number;
+  xp?: number;
   coins: number;
   gamesPlayed: number;
   gamesWon: number;
@@ -55,41 +58,50 @@ interface TodayLog {
   matches: TodayMatch[];
 }
 
-interface TournamentPlayer {
-  userId: number;
-  name: string;
-  avatar: string;
-  level: number;
-  status: string;
-  place: number;
-}
-
-interface TournamentMatch {
+interface HistoryMatch {
   id: number;
-  round: number;
   roomCode: string;
-  roomId: string;
-  seats: { userId: number; name: string; avatar: string; level: number; isBot?: boolean }[];
-  status: string;
-  winnerSeat: number | null;
-  runnerSeat: number | null;
+  game: string;
+  target: number;
+  scoreA: number;
+  scoreB: number;
+  winnerTeam: number;
+  names: string[];
+  winners: string[];
+  rounds: number;
+  duration: number;
+  createdAt: number;
 }
 
-interface Tournament {
-  id: number;
+interface HistoryRoom {
   code: string;
   name: string;
   game: string;
-  capacity: number;
-  startAt: number;
   status: string;
-  round: number;
-  playersCount: number;
-  players: TournamentPlayer[];
-  matches: TournamentMatch[];
-  winners: { place: number; userId: number; name: string; avatar: string; isBot?: boolean }[];
-  joined: boolean;
-  myStatus: string | null;
+  createdAt: number;
+  lastActivity: number;
+  finished: boolean;
+  scoreA: number | null;
+  scoreB: number | null;
+  winnerTeam: number | null;
+  players: string[];
+}
+
+interface HistoryData {
+  matches: HistoryMatch[];
+  rooms: HistoryRoom[];
+  totals: { matches: number; rooms: number };
+}
+
+/** اسم الفائز في طاولة منتهية (فريقين في الطرنيب أو لاعب في التركس) */
+function winnerLabel(r: HistoryRoom): string {
+  const names = (r.players || []).filter((n) => n && n !== '-');
+  if (names.length === 0 || r.winnerTeam === null) return '—';
+  if (r.game === 'trix') {
+    return names[r.winnerTeam] ?? '—';
+  }
+  const winners = names.filter((_, i) => i % 2 === r.winnerTeam);
+  return winners.join(' و ') || '—';
 }
 
 const STATUS_AR: Record<string, string> = {
@@ -104,13 +116,17 @@ const STATUS_AR: Record<string, string> = {
 export function AdminScreen() {
   const go = useNav((s) => s.go);
   const toast = useStore((s) => s.toast);
-  const [tab, setTab] = useState<'today' | 'users' | 'tournaments'>('today');
+  const [tab, setTab] = useState<'today' | 'users' | 'tournaments' | 'history'>('today');
   const [log, setLog] = useState<TodayLog | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [query, setQuery] = useState('');
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [history, setHistory] = useState<HistoryData | null>(null);
+  const [historyTab, setHistoryTab] = useState<'matches' | 'rooms'>('matches');
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [editTournament, setEditTournament] = useState<Tournament | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -121,6 +137,9 @@ export function AdminScreen() {
       } else if (tab === 'users') {
         const res = await api<{ users: AdminUser[] }>('admin/users', { q: query }, { method: 'GET' });
         setUsers(res.users);
+      } else if (tab === 'history') {
+        const res = await api<HistoryData>('admin/history', { limit: 60, offset: 0 }, { method: 'GET', timeout: 20000 });
+        setHistory(res);
       } else {
         const res = await api<{ tournaments: Tournament[] }>('admin/tournaments', {}, { method: 'GET' });
         setTournaments(res.tournaments);
@@ -139,11 +158,12 @@ export function AdminScreen() {
   return (
     <div className="screen-bg flex h-full flex-col">
       <TopBar title="🛡️ لوحة المدير" onBack={() => go('lobby')} />
-      <div className="mx-2 mb-2 grid grid-cols-3 gap-1 rounded-2xl bg-black/40 p-1">
+      <div className="mx-2 mb-2 grid grid-cols-4 gap-1 rounded-2xl bg-black/40 p-1">
         {([
-          ['today', 'سجل اليوم'],
+          ['today', 'اليوم'],
           ['users', 'المستخدمون'],
           ['tournaments', 'البطولات'],
+          ['history', 'سجل الطاولات'],
         ] as const).map(([key, label]) => (
           <button
             key={key}
@@ -193,7 +213,7 @@ export function AdminScreen() {
                 <div key={r.id} className="glass rounded-2xl px-3 py-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-bold">
-                      {r.game === 'mor' ? '🀄' : r.game === 'trix' ? '🧩' : '🃏'} {r.name}
+                      {r.game === 'trix' ? '🧩' : '🃏'} {r.name}
                     </span>
                     <span className="font-mono text-xs text-gold-300" dir="ltr">
                       {r.code}
@@ -223,7 +243,7 @@ export function AdminScreen() {
                     {m.roomCode}
                   </span>
                   <span className="text-[10px] font-bold">
-                    {m.game === 'mor' ? '🀄 مور' : m.game === 'trix' ? '🧩 تركس' : '🃏 طرنيب'}
+                    {m.game === 'trix' ? '🧩 تركس' : '🃏 طرنيب'}
                   </span>
                   <span className="font-bold">
                     {m.scoreA} — {m.scoreB}
@@ -267,12 +287,21 @@ export function AdminScreen() {
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
+                    <MiniBtn onClick={() => setEditUser(u)}>✏️ تعديل</MiniBtn>
                     <MiniBtn onClick={() => void act(u.id, 'coins', { amount: 500 })}>+500 🪙</MiniBtn>
                     <MiniBtn onClick={() => void act(u.id, 'coins', { amount: -500 })}>−500 🪙</MiniBtn>
                     <MiniBtn onClick={() => void act(u.id, u.isAdmin ? 'remove_admin' : 'make_admin')}>
                       {u.isAdmin ? 'إزالة الإدارة' : 'ترقية مدير'}
                     </MiniBtn>
                     <MiniBtn onClick={() => void act(u.id, u.banned ? 'unban' : 'ban')}>{u.banned ? 'إلغاء الإيقاف' : 'إيقاف'}</MiniBtn>
+                    <MiniBtn
+                      onClick={() => {
+                        if (!window.confirm(`حذف المستخدم «${u.name}» نهائياً؟`)) return;
+                        void act(u.id, 'delete');
+                      }}
+                    >
+                      🗑 حذف
+                    </MiniBtn>
                   </div>
                 </div>
               ))}
@@ -294,18 +323,112 @@ export function AdminScreen() {
                   key={t.id}
                   t={t}
                   isAdmin
+                  onEdit={() => setEditTournament(t)}
+                  onDelete={() => {
+                    if (!window.confirm(`حذف بطولة «${t.name}» نهائياً؟`)) return;
+                    void adminRun('admin/tournament/delete', { id: t.id });
+                  }}
                   onAction={async (route, body) => {
-                    try {
-                      await api(route, { id: t.id, ...body });
-                      toast('تم التنفيذ ✅', 'success');
-                      await load();
-                    } catch (e) {
-                      toast((e as Error).message, 'error');
-                    }
+                    await adminRun(route, { id: t.id, ...body });
                   }}
                 />
               ))}
             </div>
+          </>
+        )}
+        {/* ===== سجل الطاولات الكامل ===== */}
+        {!busy && tab === 'history' && history && (
+          <>
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              <Stat label="إجمالي المباريات" value={fmt(history.totals.matches)} />
+              <Stat label="إجمالي الطاولات" value={fmt(history.totals.rooms)} />
+            </div>
+            <div className="mb-2 grid grid-cols-2 gap-1 rounded-2xl bg-black/40 p-1">
+              {(
+                [
+                  ['matches', '🏁 نتائج المباريات'],
+                  ['rooms', '🪑 كل الطاولات'],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setHistoryTab(k)}
+                  className={cn('rounded-xl py-1.5 text-[11px] font-bold', historyTab === k ? 'bg-gold-500 text-felt-950' : 'text-ink-200')}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {historyTab === 'matches' && (
+              <div className="space-y-1.5">
+                {history.matches.length === 0 && <EmptyState icon="📋" title="لا مباريات مسجّلة" />}
+                {history.matches.map((m) => (
+                  <div key={m.id} className="glass rounded-2xl px-3 py-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-mono text-ink-300" dir="ltr">
+                        {m.roomCode}
+                      </span>
+                      <span className="font-bold">{m.game === 'trix' ? '🧩 تركس' : '🃏 طرنيب'}</span>
+                      <span className="text-ink-400">
+                        {new Date(m.createdAt * 1000).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between">
+                      <span className="text-xs font-black">
+                        {m.scoreA} — {m.scoreB}
+                      </span>
+                      <span className="text-[10px] text-ink-400">{m.rounds} جولة</span>
+                    </div>
+                    <div className="mt-1 rounded-xl bg-emerald-600/20 px-2 py-1 text-[11px] font-bold text-emerald-200">
+                      🏆 الفائز: {m.winners.filter(Boolean).join(' و ') || '—'}
+                    </div>
+                    <div className="mt-1 text-[10px] text-ink-400">
+                      اللاعبون: {m.names.filter((n) => n && n !== '-').join(' • ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {historyTab === 'rooms' && (
+              <div className="space-y-1.5">
+                {history.rooms.length === 0 && <EmptyState icon="🪑" title="لا طاولات" />}
+                {history.rooms.map((r) => (
+                  <div key={r.code} className="glass rounded-2xl px-3 py-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="truncate font-bold">
+                        {r.game === 'trix' ? '🧩' : '🃏'} {r.name}
+                      </span>
+                      <span className="font-mono text-gold-300" dir="ltr">
+                        {r.code}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-between text-[10px] text-ink-400">
+                      <span>
+                        {r.status === 'finished' ? 'انتهت ✅' : r.status === 'playing' ? 'جارية' : r.status === 'closed' ? 'أُغلقت' : 'بالانتظار'}
+                      </span>
+                      <span>
+                        {new Date(r.createdAt * 1000).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                    {r.finished ? (
+                      <div className="mt-1 text-[11px]">
+                        <span className="font-black">
+                          {r.scoreA} — {r.scoreB}
+                        </span>
+                        <span className="mr-2 text-emerald-200">🏆 {winnerLabel(r)}</span>
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-[10px] text-ink-500">لا نتيجة مسجّلة</div>
+                    )}
+                    {r.players.length > 0 && (
+                      <div className="mt-1 text-[10px] text-ink-400">{r.players.filter((n) => n && n !== '-').join(' • ')}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -319,9 +442,37 @@ export function AdminScreen() {
           toast('أُضيفت البطولة 🏆', 'success');
         }}
       />
+      <UserEdit
+        user={editUser}
+        onClose={() => setEditUser(null)}
+        onDone={async () => {
+          setEditUser(null);
+          await load();
+        }}
+      />
+      <TournamentEdit
+        key={editTournament?.id ?? 0}
+        tournament={editTournament}
+        onClose={() => setEditTournament(null)}
+        onDone={async () => {
+          setEditTournament(null);
+          await load();
+        }}
+      />
       <BottomNav />
     </div>
   );
+
+  /** تنفيذ أمر إداري مع توست + إعادة تحميل */
+  async function adminRun(route: string, body: Record<string, unknown>) {
+    try {
+      await api(route, body);
+      toast('تم التنفيذ ✅', 'success');
+      await load();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    }
+  }
 
   async function act(id: number, action: string, extra: Record<string, unknown> = {}) {
     try {
@@ -357,25 +508,31 @@ export function TournamentCard({
   t,
   isAdmin,
   onAction,
+  onEdit,
+  onDelete,
 }: {
   t: Tournament;
   isAdmin?: boolean;
   onAction: (route: string, body: Record<string, unknown>) => void | Promise<void>;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
+  const openTournament = useNav((s) => s.openTournament);
+  const open = () => openTournament(t.id);
   const now = Math.floor(Date.now() / 1000);
   const left = t.startAt - now;
   return (
     <div className="glass rounded-2xl p-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
+        <button onClick={open} className="min-w-0 flex-1 text-right">
           <div className="truncate text-sm font-black">
-            {t.game === 'mor' ? '🀄' : t.game === 'trix' ? '🧩' : '🃏'} {t.name}
+            {t.game === 'trix' ? '🧩' : '🃏'} {t.name}
           </div>
           <div className="text-[10px] text-ink-400">
             {STATUS_AR[t.status] ?? t.status} • {t.playersCount}/{t.capacity} مشارك
             {t.status === 'running' ? ` • الدور ${t.round}` : ''}
           </div>
-        </div>
+        </button>
         <span className="font-mono text-xs text-gold-300" dir="ltr">
           {t.code}
         </span>
@@ -418,13 +575,25 @@ export function TournamentCard({
       )}
 
       <div className="mt-2 flex flex-wrap gap-1">
+        <MiniBtn onClick={open}>👁 شاشة البطولة</MiniBtn>
         {isAdmin ? (
           <>
             {t.status !== 'running' && t.status !== 'finished' && (
               <MiniBtn onClick={() => void onAction('admin/tournament/start', {})}>▶️ بدء التصفيات</MiniBtn>
             )}
             {t.status === 'running' && <MiniBtn onClick={() => void onAction('admin/tournament/advance', {})}>🔄 تحديث الدور التالي</MiniBtn>}
-            {t.status !== 'finished' && <MiniBtn onClick={() => void onAction('admin/tournament/status', { status: 'cancelled' })}>✖️ إلغاء</MiniBtn>}
+            {onEdit && <MiniBtn onClick={onEdit}>✏️ تعديل</MiniBtn>}
+            {t.status !== 'finished' && t.status !== 'cancelled' && (
+              <MiniBtn
+                onClick={() => {
+                  if (!window.confirm(`إلغاء بطولة «${t.name}»؟ ستختفي من عند اللاعبين فوراً.`)) return;
+                  void onAction('admin/tournament/status', { status: 'cancelled' });
+                }}
+              >
+                ✖️ إلغاء
+              </MiniBtn>
+            )}
+            {onDelete && <MiniBtn onClick={onDelete}>🗑 حذف</MiniBtn>}
           </>
         ) : (
           <>
@@ -438,12 +607,134 @@ export function TournamentCard({
   );
 }
 
+/* ============================ تعديل مستخدم ============================ */
+
+function UserEdit({ user, onClose, onDone }: { user: AdminUser | null; onClose: () => void; onDone: () => void }) {
+  const toast = useStore((s) => s.toast);
+  const [name, setName] = useState(user?.name ?? '');
+  const [avatar, setAvatar] = useState(user?.avatar ?? '');
+  const [coins, setCoins] = useState(user?.coins ?? 0);
+  const [xp, setXp] = useState(user?.xp ?? 0);
+  const [password, setPassword] = useState('');
+  const [isAdmin, setIsAdmin] = useState(Boolean(user?.isAdmin));
+  const [banned, setBanned] = useState(Boolean(user?.banned));
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setName(user.name);
+    setAvatar(user.avatar);
+    setCoins(user.coins);
+    setXp(user.xp ?? 0);
+    setPassword('');
+    setIsAdmin(Boolean(user.isAdmin));
+    setBanned(Boolean(user.banned));
+  }, [user]);
+
+  const save = async () => {
+    if (!user) return;
+    setBusy(true);
+    try {
+      await api('admin/user/update', {
+        id: user.id,
+        name,
+        avatar,
+        coins,
+        xp,
+        is_admin: isAdmin,
+        banned,
+      });
+      if (password.trim().length >= 4) {
+        await api('admin/user/action', { id: user.id, action: 'password', password: password.trim() });
+      }
+      toast('تم تحديث المستخدم ✅', 'success');
+      onDone();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={Boolean(user)} onClose={onClose} title={`✏️ ${user?.username ?? ''}`}>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <Avatar emoji={avatar || '🙂'} size={48} />
+          <div className="flex-1">
+            <div className="mb-1 text-xs text-ink-300">الاسم الظاهر</div>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-2xl border border-white/12 bg-black/30 px-3 py-2 outline-none"
+            />
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-xs text-ink-300">الصورة (إيموجي)</div>
+          <input
+            value={avatar}
+            onChange={(e) => setAvatar(e.target.value)}
+            className="w-full rounded-2xl border border-white/12 bg-black/30 px-3 py-2 text-center text-lg outline-none"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="mb-1 text-xs text-ink-300">العملات 🪙</div>
+            <input
+              type="number"
+              value={coins}
+              onChange={(e) => setCoins(Number(e.target.value))}
+              className="w-full rounded-2xl border border-white/12 bg-black/30 px-3 py-2 text-center outline-none"
+            />
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-ink-300">الخبرة XP</div>
+            <input
+              type="number"
+              value={xp}
+              onChange={(e) => setXp(Number(e.target.value))}
+              className="w-full rounded-2xl border border-white/12 bg-black/30 px-3 py-2 text-center outline-none"
+            />
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-xs text-ink-300">كلمة مرور جديدة (اتركها فارغة إن لم تُرد التغيير)</div>
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••"
+            className="w-full rounded-2xl border border-white/12 bg-black/30 px-3 py-2 outline-none"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsAdmin((v) => !v)}
+            className={cn('flex-1 rounded-2xl py-2 text-sm font-bold', isAdmin ? 'bg-gold-500 text-felt-950' : 'bg-white/8')}
+          >
+            {isAdmin ? 'مدير ✅' : 'ترقية لمدير'}
+          </button>
+          <button
+            onClick={() => setBanned((v) => !v)}
+            className={cn('flex-1 rounded-2xl py-2 text-sm font-bold', banned ? 'bg-rose-600 text-white' : 'bg-white/8')}
+          >
+            {banned ? 'موقوف 🚫' : 'إيقاف الحساب'}
+          </button>
+        </div>
+        <Button variant="gold" full loading={busy} onClick={() => void save()}>
+          حفظ التعديلات
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 /* ============================ إنشاء بطولة ============================ */
 
 function CreateTournament({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const toast = useStore((s) => s.toast);
   const [name, setName] = useState('بطولة التركس');
-  const [game, setGame] = useState<'tarnib' | 'trix' | 'mor'>('tarnib');
+  const [game, setGame] = useState<'tarnib' | 'trix'>('tarnib');
   const [capacity, setCapacity] = useState(8);
   const [minutes, setMinutes] = useState(10);
   const [busy, setBusy] = useState(false);
@@ -479,7 +770,6 @@ function CreateTournament({ open, onClose, onDone }: { open: boolean; onClose: (
             {([
               ['tarnib', '🃏 طرنيب'],
               ['trix', '🧩 تركس'],
-              ['mor', '🀄 مور'],
             ] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -547,26 +837,42 @@ export function TournamentsPanel() {
 
   if (items.length === 0 && mine.length === 0) return null;
 
+  const onlyMine = mine.filter((t) => !items.some((i) => i.id === t.id));
+  const act = async (route: string, body: Record<string, unknown>) => {
+    try {
+      await api(route, body);
+      toast('تم ✅', 'success');
+      await load();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    }
+  };
+
   return (
     <>
-      <SectionTitle icon={<span>🏆</span>}>البطولات</SectionTitle>
-      <div className="mb-4 space-y-2">
-        {[...mine.filter((t) => !items.some((i) => i.id === t.id)), ...items].map((t) => (
-          <TournamentCard
-            key={t.id}
-            t={t}
-            onAction={async (route, body) => {
-              try {
-                await api(route, body);
-                toast('تم ✅', 'success');
-                await load();
-              } catch (e) {
-                toast((e as Error).message, 'error');
-              }
-            }}
-          />
-        ))}
-      </div>
+      {mine.length > 0 && (
+        <>
+          <SectionTitle icon={<span>⭐</span>}>بطولاتي</SectionTitle>
+          <div className="mb-4 space-y-2">
+            {mine.map((t) => (
+              <TournamentCard key={t.id} t={t} onAction={act} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {items.length > 0 && (
+        <>
+          <SectionTitle icon={<span>🏆</span>}>
+            {mine.length > 0 ? 'بطولات أخرى' : 'البطولات'} (اضغط البطولة لشاشة الانتظار)
+          </SectionTitle>
+          <div className="mb-4 space-y-2">
+            {[...onlyMine.filter((t) => !mine.some((m) => m.id === t.id)), ...items].map((t) => (
+              <TournamentCard key={t.id} t={t} onAction={act} />
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }
