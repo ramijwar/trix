@@ -122,10 +122,14 @@ cd tools/dev && node test-trix.mjs 1   # مباراة تركس كاملة (مم�
 
 **كيف تصدر نسخة جديدة؟**
 ```bash
-# ١) ابنِ التطبيق برقم نسخة أكبر من السابق
-node tools/android/build-apk.mjs 3 1.0.2      # أو TRIX_APK_VERSION_CODE=3 TRIX_APK_VERSION_NAME=1.0.2
-# ٢) افتح اللوحة → تاب «التحديث» → ارفع release/trix-android.apk مع رقم النسخة 3
+# ١) ابنِ التطبيق برقم نسخة أكبر من السابق (الرقم نفسه يجب أن يُنشر)
+node tools/android/build-apk.mjs 4 1.0.3      # أو TRIX_APK_VERSION_CODE=4 TRIX_APK_VERSION_NAME=1.0.3
+# ٢أ) من اللوحة: تاب «التحديث» → ارفع release/trix-android.apk مع رقم النسخة 4
+# ٢ب) أو من سطر الأوامر:
+cd tools/dev && node publish-apk.mjs ../../release/trix-android.apk 4 1.0.3 "ما الجديد…"
 ```
+> ⚠️ مهم: **رقم النسخة المنشورة في اللوحة يجب أن يطابق رقم نسخة ملف APK نفسه**
+> (يُبنى في المانيفست). إن نشرت رقماً أكبر من رقم الملف فسيرى اللاعبون إشعاراً دائماً.
 كل لاعب يفتح التطبيق يتحقق تلقائياً (`app/version`) ويرى شاشة التحديث فوراً.
 
 **المسارات:** `app/version` (فحص، عام) • `app/apk` (تنزيل الملف) •
