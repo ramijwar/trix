@@ -8,7 +8,7 @@ namespace Trix\Core;
  */
 final class Schema
 {
-    public const VERSION = 3;
+    public const VERSION = 4;
 
     public static function statements(): array
     {
@@ -35,6 +35,9 @@ final class Schema
                 streak INTEGER NOT NULL DEFAULT 0,
                 last_daily INTEGER NOT NULL DEFAULT 0,
                 inventory TEXT NOT NULL DEFAULT '[]',
+                apk_seen_code INTEGER NOT NULL DEFAULT 0,
+                apk_seen_at INTEGER NOT NULL DEFAULT 0,
+                apk_client_code INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL,
                 last_seen INTEGER NOT NULL
             )",
@@ -164,6 +167,10 @@ final class Schema
     {
         foreach ([
             "ALTER TABLE matches ADD COLUMN game TEXT NOT NULL DEFAULT 'tarnib'",
+            // آخر رقم نسخة تطبيق ظهر له إشعار التحديث (لتقرير «من لم يُحدِّث»)
+            "ALTER TABLE users ADD COLUMN apk_seen_code INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN apk_seen_at INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN apk_client_code INTEGER NOT NULL DEFAULT 0",
         ] as $sql) {
             try {
                 $pdo->exec($sql);

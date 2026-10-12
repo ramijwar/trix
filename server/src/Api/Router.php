@@ -42,10 +42,15 @@ final class Router
                         'guestEnabled' => (bool) Config::get('guest_enabled', true),
                         'maintenance' => (bool) Config::get('maintenance', false),
                         'online' => \Trix\Core\Users::onlineCount(),
+                        'appVersion' => \Trix\Core\Updates::settings()['versionCode'],
                     ]);
                     return;
 
                 // ============ الحسابات ============
+                // ============ تحديث التطبيق من داخله ============
+                case 'app/version': UpdateApi::version(); return;
+                case 'app/apk': UpdateApi::apk(); return;
+
                 case 'auth/register': AuthApi::register(); return;
                 case 'auth/login': AuthApi::login(); return;
                 case 'auth/guest': AuthApi::guest(); return;
@@ -110,6 +115,15 @@ final class Router
                 case 'admin/tournament/start': AdminApi::tournamentStart(); return;
                 case 'admin/tournament/advance': AdminApi::tournamentAdvance(); return;
                 case 'admin/tournament/delete': AdminApi::tournamentDelete(); return;
+                // ============ إدارة نسخة التطبيق ============
+                case 'admin/update': UpdateApi::state(); return;
+                case 'admin/update/settings': UpdateApi::settings(); return;
+                case 'admin/update/upload/start': UpdateApi::uploadStart(); return;
+                case 'admin/update/upload/chunk': UpdateApi::uploadChunk(); return;
+                case 'admin/update/upload/finish': UpdateApi::uploadFinish(); return;
+                case 'admin/update/upload/cancel': UpdateApi::uploadCancel(); return;
+                case 'admin/update/delete': UpdateApi::remove(); return;
+                case 'admin/update/disable': UpdateApi::disable(); return;
 
                 // ============ البطولات (لللاعبين) ============
                 case 'tournaments': AdminApi::myTournaments(); return;

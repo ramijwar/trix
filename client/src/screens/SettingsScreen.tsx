@@ -6,6 +6,7 @@ import { BottomNav, TopBar } from '../components/Nav';
 import { Button, Panel, SectionTitle } from '../components/ui';
 import { cn } from '../lib/utils';
 import { sfx, voice } from '../lib/audio';
+import { checkUpdate, humanSize, installedCode, installedName } from '../lib/updates';
 
 export function SettingsScreen() {
   const prefs = useStore((s) => s.prefs);
@@ -16,6 +17,7 @@ export function SettingsScreen() {
   const go = useNav((s) => s.go);
   const [url, setUrl] = useState(getServerUrl());
   const [checking, setChecking] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   const check = async () => {
     setChecking(true);
@@ -26,6 +28,20 @@ export function SettingsScreen() {
       toast('تم الاتصال بالخادم ✅', 'success');
     } else {
       toast(res.error ?? 'فشل الاتصال', 'error');
+    }
+  };
+
+  /** فحص يدوي للتحديثات */
+  const checkUpdates = async () => {
+    setUpdating(true);
+    const res = await checkUpdate();
+    setUpdating(false);
+    if (!res) {
+      toast('تعذّر الفحص — تحقّق من الاتصال', 'error');
+    } else if (!res.update) {
+      toast(`أنت على أحدث نسخة (${installedName()}) ✅`, 'success');
+    } else {
+      toast(`يتوفّر تحديث ${res.versionName || res.versionCode} (${humanSize(res.size)}) — ستظهر شاشة التحديث`, 'gold');
     }
   };
 
@@ -80,9 +96,23 @@ export function SettingsScreen() {
           </Button>
         </Panel>
 
+        <SectionTitle icon={<span>⬆️</span>}>تحديث التطبيق</SectionTitle>
+        <Panel className="mb-4">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-ink-300">نسختك المثبّتة</span>
+            <span className="font-mono font-bold text-gold-200">{installedName()} ({installedCode() || 'ويب'})</span>
+          </div>
+          <div className="mt-1 text-[10px] text-ink-400">
+            عند توفّر نسخة جديدة تظهر لك شاشة تحديث مع مؤشر تقدّم، ويُثبَّت التحديث مباشرة — بلا حذف التطبيق.
+          </div>
+          <Button variant="ghost" full className="mt-2" loading={updating} onClick={() => void checkUpdates()}>
+            🔍 فحص وجود تحديث
+          </Button>
+        </Panel>
+
         <SectionTitle icon={<span>ℹ️</span>}>حول اللعبة</SectionTitle>
         <Panel className="mb-4 space-y-1 text-xs leading-relaxed text-ink-300">
-          <div className="font-bold text-ink-100">طرنيب أونلاين — الإصدار 1.0.0</div>
+          <div className="font-bold text-ink-100">طرنيب وتركس أونلاين — الإصدار {installedName()}</div>
           <div>لعبة ورق عربية بين 4 لاعبين، الشركاء متقابلان. الطلب من 7 إلى 13، والهدف 31 (أو 41/61).</div>
           <div>الكبوت (13 أكلة) = +16، وطلب 13 ناجح = +26، وطلب 13 فاشل = −16 مع مضاعفة أكلات الخصم.</div>
           <div className="pt-1 text-ink-500">جميع الرسومات والأصوات أصلية ومصنوعة خصيصاً للتطبيق.</div>

@@ -32,6 +32,33 @@ const WORK = fs.mkdtempSync(path.join(os.tmpdir(), 'trix-apk-'));
 const PACKAGE = 'com.trix.game';
 const APP_LABEL = 'طرنيب أونلاين';
 
+/*
+ * رقم/اسم نسخة التطبيق — مهمّان لخاصية «التحديث من داخل التطبيق»:
+ * كل بناء جديد يجب أن يحمل رقماً أكبر من السابق حتى يكتشف التطبيق وجود تحديث.
+ *   node tools/android/build-apk.mjs             → يحفظ الرقم الحالي من المانيفست
+ *   node tools/android/build-apk.mjs 3 1.0.2     → يبني بالرقم ٣ والاسم 1.0.2
+ *   TRIX_APK_VERSION_CODE=3 TRIX_APK_VERSION_NAME=1.0.2 node tools/android/build-apk.mjs
+ */
+function manifestVersion() {
+  try {
+    const xml = fs.readFileSync(path.join(SHELL, 'AndroidManifest.xml'), 'utf8');
+    const code = /android:versionCode="(\d+)"/.exec(xml);
+    const name = /android:versionName="([^"]+)"/.exec(xml);
+    return { code: code ? code[1] : '1', name: name ? name[1] : '1.0.0' };
+  } catch {
+    return { code: '1', name: '1.0.0' };
+  }
+}
+
+const MANIFEST_VER = manifestVersion();
+const ARG_CODE = process.argv[2];
+const ARG_NAME = process.argv[3];
+const VERSION_CODE = String(process.env.TRIX_APK_VERSION_CODE || ARG_CODE || MANIFEST_VER.code);
+const VERSION_NAME = String(process.env.TRIX_APK_VERSION_NAME || ARG_NAME || MANIFEST_VER.name);
+if (!/^\d+$/.test(VERSION_CODE) || VERSION_CODE === '0') {
+  throw new Error('رقم نسخة التطبيق غير صالح: ' + VERSION_CODE);
+}
+
 function log(...a) {
   console.log('[apk]', ...a);
 }
@@ -90,8 +117,8 @@ export function buildApk() {
     '--manifest', path.join(SHELL, 'AndroidManifest.xml'),
     '--min-sdk-version', process.env.TRIX_MIN_SDK || '23',
     '--target-sdk-version', process.env.TRIX_TARGET_SDK || '34',
-    '--version-code', '1',
-    '--version-name', '1.0.0',
+    '--version-code', VERSION_CODE,
+    '--version-name', VERSION_NAME,
     '--java', path.join(WORK, 'gen'),
     ...flatFiles,
   ]);
@@ -100,7 +127,15 @@ export function buildApk() {
   log('ترجمة جافا (ecj)…');
   const classesDir = path.join(WORK, 'classes');
   fs.mkdirSync(classesDir, { recursive: true });
-  const javaFiles = [path.join(SHELL, 'java', 'com', 'trix', 'game', 'MainActivity.java')];
+  const javaFiles = [];
+  const walkJava = (d) => {
+    for (const f of fs.readdirSync(d)) {
+      const p = path.join(d, f);
+      if (fs.statSync(p).isDirectory()) walkJava(p);
+      else if (p.endsWith('.java')) javaFiles.push(p);
+    }
+  };
+  walkJava(path.join(SHELL, 'java'));
   const genDir = path.join(WORK, 'gen');
   if (fs.existsSync(genDir)) {
     const walk = (d) => {
@@ -136,6 +171,7 @@ export function buildApk() {
   if (!fs.existsSync(path.join(WORK, 'classes.dex'))) {
     throw new Error('فشل توليد classes.dex');
   }
+  log(`نسخة التطبيق: ${VERSION_NAME} (رقم ${VERSION_CODE})`);
 
   // 4) الدمج: apk الموارد + dex + أصول الواجهة (assets/www)
   log('دمج dex وأصول الواجهة…');

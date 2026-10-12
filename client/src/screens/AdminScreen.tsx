@@ -10,6 +10,47 @@ import { TournamentEdit } from './TournamentEdit';
 
 /* ============================ الأنواع ============================ */
 
+/** بيانات نسخة التطبيق المنشورة (يتحكم بها المدير) */
+interface ApkSettings {
+  versionCode: number;
+  versionName: string;
+  notes: string;
+  forced: boolean;
+  minCode: number;
+  size: number;
+  sha256: string;
+  file: string;
+  url: string;
+  package: string;
+  updatedAt: number;
+  upload?: { id?: string; size?: number; total?: number; received?: number };
+}
+
+interface ApkPendingUser {
+  id: number;
+  username: string;
+  name: string;
+  avatar: string;
+  lastSeen: number;
+  asked: boolean;
+  seenCode: number;
+}
+
+interface ApkReport {
+  latestCode: number;
+  active: number;
+  updated: number;
+  pending: number;
+  users: ApkPendingUser[];
+  days: number;
+}
+
+interface ApkState {
+  settings: ApkSettings;
+  report: ApkReport;
+  limits: { chunkBytes: number; maxBytes: number; maxChunks: number };
+}
+
 interface AdminUser {
   id: number;
   username: string;
@@ -116,7 +157,8 @@ const STATUS_AR: Record<string, string> = {
 export function AdminScreen() {
   const go = useNav((s) => s.go);
   const toast = useStore((s) => s.toast);
-  const [tab, setTab] = useState<'today' | 'users' | 'tournaments' | 'history'>('today');
+  const [tab, setTab] = useState<'today' | 'users' | 'tournaments' | 'history' | 'update'>('today');
+  const [apk, setApk] = useState<ApkState | null>(null);
   const [log, setLog] = useState<TodayLog | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [query, setQuery] = useState('');
@@ -140,6 +182,9 @@ export function AdminScreen() {
       } else if (tab === 'history') {
         const res = await api<HistoryData>('admin/history', { limit: 60, offset: 0 }, { method: 'GET', timeout: 20000 });
         setHistory(res);
+      } else if (tab === 'update') {
+        const res = await api<ApkState>('admin/update', {}, { method: 'GET', timeout: 20000 });
+        setApk(res);
       } else {
         const res = await api<{ tournaments: Tournament[] }>('admin/tournaments', {}, { method: 'GET' });
         setTournaments(res.tournaments);
@@ -158,12 +203,13 @@ export function AdminScreen() {
   return (
     <div className="screen-bg flex h-full flex-col">
       <TopBar title="🛡️ لوحة المدير" onBack={() => go('lobby')} />
-      <div className="mx-2 mb-2 grid grid-cols-4 gap-1 rounded-2xl bg-black/40 p-1">
+      <div className="mx-2 mb-2 grid grid-cols-5 gap-1 rounded-2xl bg-black/40 p-1">
         {([
           ['today', 'اليوم'],
           ['users', 'المستخدمون'],
           ['tournaments', 'البطولات'],
-          ['history', 'سجل الطاولات'],
+          ['history', 'السجل'],
+          ['update', 'التحديث'],
         ] as const).map(([key, label]) => (
           <button
             key={key}
@@ -337,6 +383,8 @@ export function AdminScreen() {
           </>
         )}
         {/* ===== سجل الطاولات الكامل ===== */}
+        {!busy && tab === 'update' && apk && <UpdateTab state={apk} reload={load} />}
+
         {!busy && tab === 'history' && history && (
           <>
             <div className="mb-2 grid grid-cols-2 gap-2">
@@ -873,6 +921,324 @@ export function TournamentsPanel() {
           </div>
         </>
       )}
+    </>
+  );
+}
+
+/* ============================ تحديث التطبيق ============================ */
+
+/** بصمة SHA-256 لملف (تُتجاهل للملفات الضخمة) */
+async function fileSha256(file: File): Promise<string> {
+  try {
+    const subtle = (globalThis.crypto as Crypto | undefined)?.subtle;
+    if (!subtle || file.size > 64 * 1048576) return '';
+    const buf = await file.arrayBuffer();
+    const hash = await subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch {
+    return '';
+  }
+}
+
+function b64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let out = '';
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    out += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + step)) as unknown as number[]);
+  }
+  return btoa(out);
+}
+
+function sizeText(bytes: number): string {
+  if (!bytes || bytes <= 0) return '—';
+  const mb = bytes / 1048576;
+  return mb >= 1 ? `${mb.toFixed(2)} ميجابايت` : `${Math.round(bytes / 1024)} كيلوبايت`;
+}
+
+/**
+ * إدارة نسخة التطبيق: رفع APK جديد (على أجزاء) + رقم النسخة + الإجبارية
+ * + تقرير من لم يُحدِّث بعد.
+ */
+function UpdateTab({ state, reload }: { state: ApkState; reload: () => Promise<void> }) {
+  const toast = useStore((s) => s.toast);
+  const s = state.settings;
+  const [code, setCode] = useState(String(s.versionCode || 1));
+  const [name, setName] = useState(s.versionName || '');
+  const [notes, setNotes] = useState(s.notes || '');
+  const [forced, setForced] = useState(Boolean(s.forced));
+  const [minCode, setMinCode] = useState(String(s.minCode || 0));
+  const [url, setUrl] = useState(s.url || '');
+  const [busy, setBusy] = useState(false);
+  const [upPercent, setUpPercent] = useState<number | null>(null);
+  const [upText, setUpText] = useState('');
+
+  useEffect(() => {
+    setCode(String(s.versionCode || 1));
+    setName(s.versionName || '');
+    setNotes(s.notes || '');
+    setForced(Boolean(s.forced));
+    setMinCode(String(s.minCode || 0));
+    setUrl(s.url || '');
+  }, [s.versionCode, s.versionName, s.notes, s.forced, s.minCode, s.url]);
+
+  const saveSettings = async () => {
+    setBusy(true);
+    try {
+      await api('admin/update/settings', {
+        versionCode: Number(code) || 0,
+        versionName: name,
+        notes,
+        forced,
+        minCode: Number(minCode) || 0,
+        url,
+      });
+      toast('حُفظت بيانات النسخة ✅', 'success');
+      await reload();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeApk = async () => {
+    if (!window.confirm('حذف ملف الـ APK المخزَّن على الخادم؟ (يبقى الرقم والملاحظات)')) return;
+    setBusy(true);
+    try {
+      await api('admin/update/delete', {});
+      toast('حُذف ملف النسخة 🗑', 'success');
+      await reload();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disableAll = async () => {
+    if (!window.confirm('إيقاف إشعار التحديث تماماً لكل اللاعبين؟ (يُحذف الملف والرقم)')) return;
+    setBusy(true);
+    try {
+      await api('admin/update/disable', {});
+      toast('أُوقف إشعار التحديث', 'success');
+      await reload();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** رفع ملف APK على أجزاء صغيرة مع مؤشر تقدّم */
+  const upload = async (file: File) => {
+    const CHUNK = 512 * 1024;
+    const total = Math.max(1, Math.ceil(file.size / CHUNK));
+    const versionCode = Number(code) || 0;
+    if (versionCode <= 0) {
+      toast('اكتب رقم النسخة أولاً (مثلاً 2)', 'error');
+      return;
+    }
+    setUpPercent(0);
+    setUpText('جارٍ تجهيز الرفع…');
+    try {
+      const sha = await fileSha256(file);
+      const started = await api<{ upload: { id: string } }>('admin/update/upload/start', {
+        size: file.size,
+        total,
+        versionCode,
+        versionName: name,
+        sha256: sha,
+      });
+      const id = started.upload.id;
+      for (let i = 0; i < total; i++) {
+        const slice = file.slice(i * CHUNK, Math.min(file.size, (i + 1) * CHUNK));
+        const buf = await slice.arrayBuffer();
+        await api('admin/update/upload/chunk', { upload: id, index: i, data: b64(buf) }, { timeout: 60000 });
+        const percent = Math.round(((i + 1) * 100) / total);
+        setUpPercent(percent);
+        setUpText(`جارٍ الرفع: ${percent}% (${sizeText(Math.min(file.size, (i + 1) * CHUNK))} من ${sizeText(file.size)})`);
+      }
+      setUpText('جارٍ تركيب الملف على الخادم…');
+      const done = await api<{ settings: ApkSettings; size: number }>('admin/update/upload/finish', { upload: id }, { timeout: 120000 });
+      toast(`تم نشر النسخة ${done.settings.versionName || done.settings.versionCode} ✅`, 'success');
+      setUpPercent(100);
+      setUpText(`تم ✅ — ${sizeText(done.size)}`);
+      await reload();
+      setTimeout(() => setUpPercent(null), 1500);
+    } catch (e) {
+      setUpPercent(null);
+      setUpText('');
+      toast((e as Error).message, 'error');
+      try {
+        await api('admin/update/upload/cancel', { upload: 'cancel' });
+      } catch {
+        /* تجاهل */
+      }
+    }
+  };
+
+  const report = state.report;
+
+  return (
+    <>
+      <SectionTitle icon={<span>⬆️</span>}>نسخة التطبيق المنشورة</SectionTitle>
+      <div className="glass mb-3 space-y-2 rounded-2xl p-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-ink-300">المنشور حالياً</span>
+          <span className="font-mono font-bold text-gold-200">
+            {s.versionCode > 0 ? `${s.versionName || '—'} (${s.versionCode})` : 'لا يوجد'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-ink-400">
+          <span>الملف على الخادم</span>
+          <span>{s.file ? `${s.file} • ${sizeText(s.size)}` : s.url ? 'رابط خارجي' : '—'}</span>
+        </div>
+        {s.sha256 ? <div className="truncate text-[10px] text-ink-500" dir="ltr">SHA-256: {s.sha256}</div> : null}
+        {s.updatedAt ? (
+          <div className="text-[10px] text-ink-500">آخر تحديث للبيانات: {timeAgo(s.updatedAt)}</div>
+        ) : null}
+      </div>
+
+      <SectionTitle icon={<span>📦</span>}>رفع نسخة جديدة (ملف APK)</SectionTitle>
+      <div className="glass mb-3 space-y-2 rounded-2xl p-3">
+        <div className="text-[10px] leading-5 text-ink-400">
+          ارفع ملف الـ APK المبني من المشروع. يُرفع على أجزاء صغيرة ليعمل على أي استضافة، ثم يصبح متاحاً للاعبين فوراً.
+        </div>
+        <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-white/20 bg-black/25 px-3 py-4 text-center text-xs font-bold text-gold-200">
+          ⬆️ اختر ملف APK للرفع
+          <input
+            type="file"
+            accept=".apk,application/vnd.android.package-archive"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void upload(f);
+            }}
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-[11px] text-ink-300">
+            رقم النسخة (versionCode)
+            <input
+              dir="ltr"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, ''))}
+              className="mt-1 w-full rounded-xl border border-white/12 bg-black/30 px-2 py-1.5 text-center font-mono text-sm outline-none"
+            />
+          </label>
+          <label className="text-[11px] text-ink-300">
+            اسم النسخة (versionName)
+            <input
+              dir="ltr"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="1.0.2"
+              className="mt-1 w-full rounded-xl border border-white/12 bg-black/30 px-2 py-1.5 text-center font-mono text-sm outline-none"
+            />
+          </label>
+        </div>
+        {upPercent !== null && (
+          <div className="pt-1">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-black/50">
+              <div className="h-full rounded-full bg-gradient-to-l from-gold-400 to-emerald-400" style={{ width: `${Math.max(2, upPercent)}%` }} />
+            </div>
+            <div className="mt-1 text-[10px] text-ink-300">{upText}</div>
+          </div>
+        )}
+        {s.upload?.id ? (
+          <div className="text-[10px] text-amber-300">
+            يوجد رفع غير مكتمل ({(s.upload.received ?? 0)}/{(s.upload.total ?? 0)} جزء) — ارفع الملف من جديد لإكماله.
+          </div>
+        ) : null}
+      </div>
+
+      <SectionTitle icon={<span>📝</span>}>بيانات الرسالة التي تظهر للاعبين</SectionTitle>
+      <div className="glass mb-3 space-y-2 rounded-2xl p-3">
+        <label className="block text-[11px] text-ink-300">
+          ما الجديد في هذه النسخة؟
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="مثال: إصلاح الاتصال، سرعة أعلى في اللعب…"
+            className="mt-1 w-full resize-none rounded-xl border border-white/12 bg-black/30 px-2 py-2 text-[12px] outline-none"
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-[11px] text-ink-300">
+            أقل نسخة مدعومة (إجباري قبلها)
+            <input
+              dir="ltr"
+              value={minCode}
+              onChange={(e) => setMinCode(e.target.value.replace(/[^\d]/g, ''))}
+              className="mt-1 w-full rounded-xl border border-white/12 bg-black/30 px-2 py-1.5 text-center font-mono text-sm outline-none"
+            />
+          </label>
+          <label className="text-[11px] text-ink-300">
+            رابط تنزيل خارجي (بديل عن الرفع)
+            <input
+              dir="ltr"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://…/trix.apk"
+              className="mt-1 w-full rounded-xl border border-white/12 bg-black/30 px-2 py-1.5 text-left font-mono text-[11px] outline-none"
+            />
+          </label>
+        </div>
+        <button
+          onClick={() => setForced((v) => !v)}
+          className={cn(
+            'flex w-full items-center justify-between rounded-2xl px-3 py-2 text-xs font-bold',
+            forced ? 'bg-rose-600/30 text-rose-100' : 'bg-white/8 text-ink-200'
+          )}
+        >
+          <span>⛔ تحديث إجباري (لا يمكن تخطّيه)</span>
+          <span className={cn('rounded-full px-2 py-0.5 text-[10px]', forced ? 'bg-rose-500 text-white' : 'bg-black/40')}>
+            {forced ? 'مفعّل' : 'متوقف'}
+          </span>
+        </button>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button variant="gold" size="sm" loading={busy} onClick={() => void saveSettings()}>
+            💾 حفظ البيانات
+          </Button>
+          {s.file ? (
+            <Button variant="danger" size="sm" loading={busy} onClick={() => void removeApk()}>
+              🗑 حذف الملف
+            </Button>
+          ) : null}
+          <Button variant="ghost" size="sm" loading={busy} onClick={() => void disableAll()}>
+            🔕 إيقاف إشعار التحديث
+          </Button>
+        </div>
+      </div>
+
+      <SectionTitle icon={<span>📊</span>}>من لم يُحدِّث بعد (آخر {report.days} يوماً)</SectionTitle>
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        <Stat label="لاعبون نشطون" value={fmt(report.active)} />
+        <Stat label="حدَّثوا" value={fmt(report.updated)} />
+        <Stat label="لم يُحدِّثوا" value={fmt(report.pending)} />
+      </div>
+      <div className="mb-4 space-y-1.5">
+        {report.users.length === 0 && <EmptyState icon="🎉" title="الجميع على أحدث نسخة" />}
+        {report.users.map((u) => (
+          <div key={u.id} className="glass flex items-center gap-2 rounded-2xl px-3 py-2">
+            <Avatar emoji={u.avatar} size={30} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold">{u.name}</div>
+              <div className="text-[10px] text-ink-400">
+                @{u.username} • آخر ظهور {timeAgo(u.lastSeen)}
+              </div>
+            </div>
+            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', u.asked ? 'bg-amber-500/30 text-amber-100' : 'bg-white/10 text-ink-300')}>
+              {u.asked ? 'ظهر له الإشعار' : 'لم يفتح التطبيق بعد'}
+            </span>
+          </div>
+        ))}
+      </div>
     </>
   );
 }

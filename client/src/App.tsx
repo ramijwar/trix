@@ -13,6 +13,7 @@ import { ShopScreen } from './screens/ShopScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { AdminScreen } from './screens/AdminScreen';
 import { TournamentScreen } from './screens/TournamentScreen';
+import { UpdateGate } from './components/UpdateGate';
 
 export default function App() {
   const booted = useStore((s) => s.booted);
@@ -76,6 +77,7 @@ export default function App() {
     return (
       <>
         <ServerSetupScreen />
+        <UpdateGate />
         <Toasts />
       </>
     );
@@ -85,6 +87,7 @@ export default function App() {
     return (
       <>
         <AuthScreen />
+        <UpdateGate />
         <Toasts />
       </>
     );
@@ -109,6 +112,7 @@ export default function App() {
           {screens[view] ?? screens.lobby}
         </div>
       </div>
+      <UpdateGate />
       <Toasts />
     </>
   );

@@ -46,7 +46,9 @@ require_once __DIR__ . '/Game/Engine.php';
 require_once __DIR__ . '/Core/Rooms.php';
 require_once __DIR__ . '/Core/Users.php';
 require_once __DIR__ . '/Core/Tournaments.php';
+require_once __DIR__ . '/Core/Updates.php';
 require_once __DIR__ . '/Api/AdminApi.php';
+require_once __DIR__ . '/Api/UpdateApi.php';
 require_once __DIR__ . '/Api/Router.php';
 
 // تحميل الإعدادات
